@@ -21,7 +21,14 @@ include_directories(SYSTEM src/competitor/hot/src/libs/hot/rowex/include)
 include_directories(SYSTEM src/competitor/hot/src/libs/hot/single-threaded/include)
 include_directories(SYSTEM src/competitor/hot/src/libs/idx/content-helpers/include)
 
-add_compile_options(-faligned-new -march=native -g -O3)
+add_compile_options(-faligned-new -march=native)
+
+# Set compile flags based on build type
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-g)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_options(-O3)
+endif()
 
 # add_subdirectory(src/competitor/wormhole)
 add_subdirectory(src/competitor/wormhole_u64)
