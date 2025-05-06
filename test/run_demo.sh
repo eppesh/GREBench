@@ -11,9 +11,9 @@ THREAD_NUM=1
 
 # Determine index list based on thread number
 if [[ "$THREAD_NUM" -eq 1 ]]; then
-    INDEX_LIST="alex,alexol,lipp,lippol,btreeolc,pgm,xindex"
+    INDEX_LIST="alex,alexol,lipp,lippol,btreeolc,pgm,libox,xindex"
 else
-    INDEX_LIST="alexol,lippol,btreeolc,xindex"
+    INDEX_LIST="alexol,lippol,btreeolc,libox,xindex"
 fi
 
 # Run the benchmark
