@@ -50,6 +50,7 @@ class Benchmark {
     std::string index_type;
     std::string keys_file_path;
     std::string keys_file_type;
+    std::string config_file;        // segment config file for libox
     std::string sample_distribution;
     bool latency_sample = false;
     double latency_sample_ratio = 0.01;
@@ -130,8 +131,10 @@ public:
 
         if (!data_shift) {
             tbb::parallel_sort(keys, keys + table_size);
+            std::cout << "Original num of keys: " << table_size;
             auto last = std::unique(keys, keys + table_size);
             table_size = last - keys;
+            std::cout << ", min key: " << keys[0] << ", max key: " << keys[table_size-1] << std::endl;
             std::shuffle(keys, keys + table_size, gen);
         }
 
@@ -156,7 +159,7 @@ public:
 #pragma omp parallel for num_threads(thread_num)
         for (int i = 0; i < init_keys.size(); i++) {
             init_key_values[i].first = init_keys[i];
-            init_key_values[i].second = 123456789;
+            init_key_values[i].second = init_keys[i];   // Use key as its value for correctness checking
         }
         COUT_VAR(table_size);
         COUT_VAR(init_keys.size());
@@ -168,7 +171,7 @@ public:
         index = get_index<KEY_TYPE, PAYLOAD_TYPE>(index_type);
 
         // initilize Index (sort keys first)
-        Param param = Param(thread_num, 0);
+        Param param = Param(thread_num, 0, config_file);
         index->init(&param);
 
         // deal with the background thread case
@@ -181,6 +184,7 @@ public:
     /*
    * keys_file_path:      the path where keys file at
    * keys_file_type:      binary or text
+   * config_file:         segment config file for libox
    * read_ratio:          the ratio of read operation
    * insert_ratio         the ratio of insert operation
    * delete_ratio         the ratio of delete operation
@@ -201,6 +205,7 @@ public:
         auto flags = parse_flags(argc, argv);
         keys_file_path = get_required(flags, "keys_file"); // required
         keys_file_type = get_with_default(flags, "keys_file_type", "binary");
+        config_file = get_required(flags, "config_file"); // required for libox
         read_ratio = stod(get_required(flags, "read")); // required
         insert_ratio = stod(get_with_default(flags, "insert", "0")); // required
         delete_ratio = stod(get_with_default(flags, "delete", "0"));
@@ -334,17 +339,17 @@ public:
 
                 if (op == READ) {  // get
                     auto ret = index->get(key, val, &paramI);
-                    // if(!ret) {
-                    //     printf("read not found, Key %lu\n",key);
-                    //     continue;
-                    // }
-                    // if(val != 123456789) {
-                    //     printf("read failed, Key %lu, val %llu\n",key, val);
-                    //     exit(1);
-                    // }
+                    if(!ret) {
+                        printf("read not found, Key %lu\n",key);
+                        continue;
+                    }
+                    if(val != key) {
+                        printf("read failed, Key %lu, val %llu\n",key, val);
+                        exit(1);
+                    }
                     thread_param.success_read += ret;
                 } else if (op == INSERT) {  // insert
-                    auto ret = index->put(key, 123456789, &paramI);
+                    auto ret = index->put(key, key, &paramI);
                     thread_param.success_insert += ret;
                 } else if (op == UPDATE) {  // update
                     auto ret = index->update(key, 234567891, &paramI);
@@ -443,9 +448,14 @@ public:
             ofile << "key_path" << ",";
             ofile << "index_type" << ",";
             ofile << "throughput" << ",";
+            ofile << "init_table_ratio" << ",";
             ofile << "init_table_size" << ",";
             ofile << "memory_consumption" << ",";
             ofile << "thread_num" << ",";
+            ofile << "success_read" << ",";
+            ofile << "success_insert" << ",";
+            ofile << "success_update" << ",";
+            ofile << "success_remove" << ",";
             ofile << "min" << ",";
             ofile << "50 percentile" << ",";
             ofile << "90 percentile" << ",";
@@ -474,9 +484,14 @@ public:
         ofile << keys_file_path << ",";
         ofile << index_type << ",";
         ofile << stat.throughput << ",";
+        ofile << init_table_ratio<< ",";
         ofile << init_table_size << ",";
         ofile << stat.memory_consumption << ",";
         ofile << thread_num << ",";
+        ofile << stat.success_read << ",";
+        ofile << stat.success_insert << ",";
+        ofile << stat.success_update << ",";
+        ofile << stat.success_remove << ",";
         if (latency_sample) {
             ofile << stat.latency[0] << ",";
             ofile << stat.latency[0.5 * stat.latency.size()] << ",";
@@ -513,6 +528,8 @@ public:
         load_keys();
         generate_operations(keys);
         for (auto s: all_index_type) {
+            std::cout << "=============================================" << std::endl;
+            std::cout << "Start testing " << s << " ..." << std::endl;
             for (auto t: all_thread_num) {
                 thread_num = stoi(t);
                 index_type = s;

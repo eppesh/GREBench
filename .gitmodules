@@ -33,3 +33,7 @@
 [submodule "src/competitor/hot/src"]
 	path = src/competitor/hot/src
 	url = https://github.com/speedskater/hot.git
+[submodule "src/competitor/libox/src"]
+	path = src/competitor/libox/src
+	url = https://github.com/eppesh/Density.git
+	branch = gre
