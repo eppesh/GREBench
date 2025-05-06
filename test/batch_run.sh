@@ -28,13 +28,18 @@ for SEGMENT_FILE in "$SEGMENT_DIR"/optimized_segments_*.csv; do
     echo "Final trace file: ${TRACE_NAME}"
 
     # Try to find the corresponding trace file (first match)
-    TRACE_FILE=$(find "$TRACE_DIR" -maxdepth 1 -type f -name "${TRACE_NAME}*" | head -n 1)
+    # Try to find a trace file that matches exactly (with or without .csv suffix)
+    TRACE_FILE=$(find "$TRACE_DIR" -maxdepth 1 -type f | grep -E "/${TRACE_NAME}(\.csv)?$" | head -n 1)
+
 
     if [[ -z "$TRACE_FILE" ]]; then
         echo "No matching trace found for config $SEGMENT_FILE"
         continue
     fi
-
+    echo "Trace: ${TRACE_FILE}"
+    echo "Segment: ${SEGMENT_FILE}"
+    echo "---------------------------------------------------------------------------------"
+    
     LOG_FILE="$RESULT_DIR/log_${TRACE_NAME}.log"
     for THREAD_NUM in "${THREAD_COUNTS[@]}"; do
         echo "Running trace [$TRACE_FILE] with $THREAD_NUM threads"

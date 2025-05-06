@@ -2,10 +2,6 @@
 
 # Set binary path based on mode
 PROGRAM="../build/release/microbench"
-if [[ "$1" == "debug" ]]; then
-    PROGRAM="gdb --args ../build/debug/microbench"
-fi
-
 # Set the thread number here
 THREAD_NUM=1
 
@@ -15,6 +11,12 @@ if [[ "$THREAD_NUM" -eq 1 ]]; then
 else
     INDEX_LIST="alexol,lippol,btreeolc,libox,xindex"
 fi
+
+if [[ "$1" == "debug" ]]; then
+    PROGRAM="gdb --args ../build/debug/microbench"
+    INDEX_LIST="libox"
+fi
+
 
 # Run the benchmark
 ${PROGRAM} \
