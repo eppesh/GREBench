@@ -19,9 +19,13 @@ mkdir -p "$RESULT_DIR"
 
 for SEGMENT_FILE in "$SEGMENT_DIR"/optimized_segments_*.csv; do
     # Extract trace base name from segment file
+    echo "seg file: ${SEGMENT_FILE}"
     BASENAME=$(basename "$SEGMENT_FILE")
+    echo "base file: ${BASENAME}"
     TRACE_NAME="${BASENAME#optimized_segments_}"
+    echo "trace file: ${TRACE_NAME}"
     TRACE_NAME="${TRACE_NAME%.csv}"
+    echo "Final trace file: ${TRACE_NAME}"
 
     # Try to find the corresponding trace file (first match)
     TRACE_FILE=$(find "$TRACE_DIR" -maxdepth 1 -type f -name "${TRACE_NAME}*" | head -n 1)
@@ -41,7 +45,7 @@ for SEGMENT_FILE in "$SEGMENT_DIR"/optimized_segments_*.csv; do
             INDEX_LIST="alexol,lippol,btreeolc,libox,xindex"
         fi
 
-        OUTPUT_FILE="$RESULT_DIR/out_${TRACE_NAME}_t${THREAD_NUM}.csv"
+        OUTPUT_FILE="$RESULT_DIR/out_readonly.csv"
 
         {
             echo "===== Test: $TRACE_NAME | Threads: $THREAD_NUM ====="
