@@ -10,7 +10,7 @@ class LiBoxInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
             18, 19, 20, 21, 22, 23};  // Adjust this as needed
         for (size_t i = 0; i < taskCoreIDs.size(); i++) {
             task_pool_.emplace_back([this]() {
-                std::function<void()> task;
+                std::packaged_task<void()> task;
                 while (split_task_queue_.popTask(task)) {
                     task();
                 }
