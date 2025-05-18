@@ -46,7 +46,7 @@ class LiBoxInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
                 std::pair<KEY_TYPE, PAYLOAD_TYPE> *result,
                 Param *param = nullptr);
 
-    long long memory_consumption() { return -1; }
+    long long memory_consumption() { return libox_.get_total_size(); }
 
    private:
     liboxns::LiBox<KEY_TYPE, PAYLOAD_TYPE> libox_;
@@ -73,8 +73,8 @@ template <class KEY_TYPE, class PAYLOAD_TYPE>
 bool LiBoxInterface<KEY_TYPE, PAYLOAD_TYPE>::put(KEY_TYPE key,
                                                  PAYLOAD_TYPE value,
                                                  Param *param) {
-    libox_.insertKeyValue(key, value);
-    return true;
+    auto res = libox_.insertKeyValue(key, value);
+    return (res.status == liboxns::InsertStatus::SUCCESS);
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>

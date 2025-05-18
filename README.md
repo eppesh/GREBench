@@ -23,7 +23,18 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && make
 ```
 
+build for release (by default):
+- cd test && bash build.sh
+build for debug:
+- cd test && bash build.sh debug
+
 ## Basic usage
+
+run for release (by default):
+- cd test && bash run_demo.sh
+run for debug:
+- cd test && bash run_demo.sh debug
+
 To calculate throughput:
 ```
 ./build/microbench \

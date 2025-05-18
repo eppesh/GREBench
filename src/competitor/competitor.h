@@ -1,8 +1,8 @@
 #include"./indexInterface.h"
 #include "./alex/alex.h"
 #include "./alexol/alex.h"
-/* #include "./artsync/artrowex.h"
 #include "./artsync/artolc.h"
+/* #include "./artsync/artrowex.h"
 #include "./artsync/artunsync.h" */
 #include "./xindex/xindex.h"
 #include "./btreeolc/btreeolc.h"
@@ -55,9 +55,9 @@ indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
   else if(index_type == "btree") {
     index = new BTreeInterface<KEY_TYPE, PAYLOAD_TYPE>;
   }
-  /* else if (index_type == "artolc") {
+  else if (index_type == "artolc") {
     index = new ARTOLCInterface<KEY_TYPE, PAYLOAD_TYPE>;
-  } */
+  }
   // else if (index_type == "artrowex") {
   //   index = new ARTROWEXInterface<KEY_TYPE, PAYLOAD_TYPE>;
   // }

@@ -3,7 +3,7 @@ build
 build/*
 resources
 resources/*
-result/out_demo.csv
+result/
 # result
 # result/*
 
