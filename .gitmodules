@@ -37,3 +37,6 @@
 	path = src/competitor/libox/src
 	url = https://github.com/eppesh/Density.git
 	branch = gre
+[submodule "src/competitor/loft/src"]
+	path = src/competitor/loft/src
+	url = https://github.com/yuxuanMo/LOFT.git

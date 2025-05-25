@@ -1,9 +1,0 @@
-id,read_ratio,insert_ratio,update_ratio,scan_ratio,delete_ratio,key_path,index_type,throughput,init_table_ratio,init_table_size,memory_consumption,thread_num,success_read,success_insert,success_update,success_remove,min,50 percentile,90 percentile,99 percentile,99.9 percentile,99.99 percentile,max,avg,seed,scan_num,latency_variance,latency_sample,data_shift,pgm,error_bound,table_size
-20250505230807,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,alex,38451352,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230816,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,alexol,22908060,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230826,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,lipp,23438456,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230847,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,lippol,11466166,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230917,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,btreeolc,6680890,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230954,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,pgm,5356712,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505230957,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,libox,82713514,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
-20250505231029,1,0,0,0,0,/mnt/shared_traces/vmware_u32/text_format/w106.csv,xindex,6156182,1,275171,0,1,200000000,0,0,0,0,0,0,0,0,0,0,0,1866,100,0,0,0,0,64,275171
