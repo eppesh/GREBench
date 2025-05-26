@@ -20,9 +20,12 @@ class ThroughputPlotter:
             'alexol': 'ALEX+',
             'lippol': 'LIPP+',
             'xindex': 'XIndex',
-            'artolc': 'ART',
+            'artolc': 'ART+',
             'btreeolc': 'B+tree',
-            'loft': 'LOFT'
+            'loft': 'LOFT',
+            'alex': 'ALEX',
+            'lipp': 'LIPP',
+            'artunsync': 'ART'
         }
         
         # Color scheme
@@ -31,9 +34,12 @@ class ThroughputPlotter:
             'ALEX+': '#377eb8',    # Blue
             'LIPP+': '#4daf4a',    # Green
             'XIndex': '#984ea3',   # Purple
-            'ART': '#ff7f00',      # Orange
+            'ART+': '#ff7f00',      # Orange
             'B+tree': '#333333',   # Dark gray
             'LOFT': '#8c564b',     # Rich burgundy
+            'ALEX': '#377eb8',     # Different blue #1f77b4
+            'LIPP': '#4daf4a',     # Different green #2ca02c
+            'ART': '#ff7f00',     # Different red: #d62728
         }
         
         # Marker mapping
@@ -42,9 +48,12 @@ class ThroughputPlotter:
             'ALEX+': 's',      # Square
             'LIPP+': '^',      # Triangle up
             'XIndex': 'D',     # Diamond
-            'ART': 'v',        # Triangle down
+            'ART+': 'v',        # Triangle down
             'B+tree': '*',     # Star
             'LOFT': 'X',       # X
+            'ALEX': 's',       # Pentagon  'p'
+            'LIPP': '^',       # Hexagon 'h'
+            'ART': 'v',       # Triangle left '<'
         }
         
         # Trace mapping
@@ -119,7 +128,8 @@ class ThroughputPlotter:
     def get_ordered_index_types(self, df):
         """Get ordered list of index types present in data."""
         actual_indices = df['index_type'].unique()
-        desired_order = ['LiBox', 'ALEX+', 'LIPP+', 'ART', 'XIndex', 'B+tree', 'LOFT']
+        desired_order = ['LiBox', 'ALEX', 'LIPP', 'ART'] # for memory vs traces
+        # desired_order = ['LiBox', 'ALEX+', 'LIPP+', 'ART', 'XIndex', 'B+tree', 'LOFT'] # for basic type
         return [idx for idx in desired_order if idx in actual_indices]
     
     def get_traces(self, df):
@@ -353,11 +363,12 @@ class ThroughputPlotter:
         traces = self.get_traces(df)
         trace_titles = [self.trace_map.get(t, t) for t in traces]
         ordered_index_types = self.get_ordered_index_types(df)
+        # print(f"index types: {ordered_index_types}")
         
         bulk_ratios = [0.2, 0.4, 0.6, 0.8, 1.0]
         bulk_labels = ['20%', '40%', '60%', '80%', '100%']
         
-        fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(15, 10), sharex=True, sharey=True)
+        fig, axes = plt.subplots(nrows=1, ncols=6, figsize=(16, 3.5), sharex=True)
         axes = axes.flatten()
         
         legend_handles = {}
@@ -374,7 +385,7 @@ class ThroughputPlotter:
                     data = df[(df['trace'] == trace) & 
                              (df['init_table_ratio'] == bulk_ratio) & 
                              (df['index_type'] == index_name)]
-                    
+                    # print(f"index: {index_name} memory: {data['memory_consumption']}")
                     if not data.empty:
                         memory = data['memory_consumption'].mean() / 1e9  # Convert to GB
                         memories.append(memory)
@@ -397,10 +408,12 @@ class ThroughputPlotter:
                     
                     legend_handles[index_name] = line
             
-            ax.set_title(trace_titles[j], fontsize=12)
             ax.set_xlabel("Bulk-loading Ratio (%)", fontsize=11)
             if j % 3 == 0:
                 ax.set_ylabel("Memory Consumption (GB)", fontsize=11)
+                
+            ax.annotate(trace_titles[j], xy=(0.5, -0.25), xycoords='axes fraction', 
+                      ha='center', va='center', fontsize=11)
             
             ax.set_xticks([20, 40, 60, 80, 100])
             ax.set_xlim(15, 105)

@@ -21,27 +21,21 @@ DATE_TAG=$(date +"%m%d")
 OUTPUT_FILE="$RESULT_DIR/out_libox_$DATE_TAG.csv"
 
 # Available configurations 
-ALL_TRACES=("osm.csv" "genome.csv" "fb.csv" "w027.csv" "w045.csv" "longitudes-200M.csv" "msr_web.csv" "w048.csv" "umass_financial1" "umass_financial2" "umass_websearch1" "umass_websearch2" "umass_websearch3" )
+#ALL_TRACES=("osm.csv" "genome.csv" "fb.csv" "w027.csv" "w045.csv" "longitudes-200M.csv" "msr_web.csv" "w048.csv" "umass_financial1" "umass_financial2" "umass_websearch1" "umass_websearch2" "umass_websearch3" )
+ALL_TRACES=("osm.csv" "genome.csv" "fb.csv" "longitudes-200M.csv" "msr_web.csv" "w048.csv" )
 # ALL_SEGMENTS=("segments_osm.csv" "segments_genome.csv" "segments_fb.csv" "segments_w027.csv" "segments_w045.csv" "segments_longitudes-200M.csv" "segments_msr_web.csv" "segments_w048.csv" "segments_umass_financial1.csv")
 ALL_SEGMENTS=(
     "segments_osm.csv",
     "segments_genome.csv",
     "segments_fb.csv",
-    "segments_w027.csv",
-    "segments_w045.csv",
     "segments_longitudes-200M.csv",
     "segments_msr_web.csv",
-    "segments_w048.csv",
-    "segments_umass_financial1.csv",
-    "segments_umass_financial2.csv",
-    "segments_umass_websearch1.csv",
-    "segments_umass_websearch2.csv",
-    "segments_umass_websearch3.csv"
+    "segments_w048.csv"
 )
-ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80")
+ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80" "init20" "init40" "init60" "init80" "init100")
 ALL_THREAD_COUNTS=(1 8 16 24 32 40 48 56 64 72 80 84)
 DEFAULT_INDEX_LIST="alexol,lippol,btreeolc,artolc,libox,xindex"
-ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btreeolc" "artolc" "libox" "xindex" "loft")
+ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft")
 
 # Define workload configurations
 declare -A WORKLOAD_PARAMS
@@ -52,6 +46,12 @@ WORKLOAD_PARAMS[balanced]="--read=0.5 --insert=0.5 --init_table_ratio=0.5 --oper
 WORKLOAD_PARAMS[read60]="--read=0.6 --insert=0.4 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[read80]="--read=0.8 --insert=0.2 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[writeonly]="--read=0.0 --insert=1.0 --init_table_ratio=0.5 --operations_num=200000000"
+# workloads for memory consumption test (different bulkloading ratio)
+WORKLOAD_PARAMS[init20]="--read=0.0 --insert=1.0 --init_table_ratio=0.2 --operations_num=0"
+WORKLOAD_PARAMS[init40]="--read=0.0 --insert=1.0 --init_table_ratio=0.4 --operations_num=0"
+WORKLOAD_PARAMS[init60]="--read=0.0 --insert=1.0 --init_table_ratio=0.6 --operations_num=0"
+WORKLOAD_PARAMS[init80]="--read=0.0 --insert=1.0 --init_table_ratio=0.8 --operations_num=0"
+WORKLOAD_PARAMS[init100]="--read=0.0 --insert=1.0 --init_table_ratio=1.0 --operations_num=0"
 
 # Parse command line arguments
 SELECTED_TRACES=()

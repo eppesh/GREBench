@@ -67,6 +67,10 @@ private:
     inline static uint64_t swap_endian(uint64_t i) {
         return __builtin_bswap64(i);
     }
+    inline static int64_t swap_endian(int64_t i) {
+        // Cast to unsigned, swap, then cast back to signed
+        return static_cast<int64_t>(swap_endian(static_cast<uint64_t>(i)));
+    }
 };
 
 template<class KEY_TYPE, class PAYLOAD_TYPE>
