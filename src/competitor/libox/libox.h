@@ -94,5 +94,7 @@ template <class KEY_TYPE, class PAYLOAD_TYPE>
 size_t LiBoxInterface<KEY_TYPE, PAYLOAD_TYPE>::scan(
     KEY_TYPE key_low_bound, size_t key_num,
     std::pair<KEY_TYPE, PAYLOAD_TYPE> *result, Param *param) {
-    return 0;
+    auto res =
+        libox_.scan(key_low_bound, static_cast<uint32_t>(key_num), result);
+    return res;
 }
