@@ -1,17 +1,21 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
+from matplotlib.backends.backend_pdf import PdfPages
 import argparse
 import os
 from datetime import datetime
+import subprocess
+import tempfile
 
 class ThroughputPlotter:
     """
-    A comprehensive plotting class for index structure performance analysis.
+    A comprehensive plotting class for index structure performance analysis with PDF/A output.
     """
     
-    def __init__(self, dpi=600):
+    def __init__(self, dpi=600, pdfa_compliance=True):
         self.dpi = dpi
+        self.pdfa_compliance = pdfa_compliance
         self.setup_matplotlib()
         
         # Index type mapping
@@ -74,7 +78,7 @@ class ThroughputPlotter:
         }
         
     def setup_matplotlib(self):
-        """Configure matplotlib for publication-quality figures."""
+        """Configure matplotlib for publication-quality PDF/A figures."""
         matplotlib.rcParams.update({
             'font.family': 'serif',
             'text.usetex': False,           
@@ -92,6 +96,11 @@ class ThroughputPlotter:
             'savefig.dpi': self.dpi,
             'savefig.format': 'pdf',
             'savefig.bbox': 'tight',
+            # PDF/A specific settings
+            'pdf.fonttype': 42,  # Embed TrueType fonts (required for PDF/A)
+            'ps.fonttype': 42,   # Also for EPS output
+            'pdf.use14corefonts': False,  # Don't use Type 1 fonts
+            'font.serif': ['DejaVu Serif', 'Times New Roman', 'serif'],  # Use embeddable fonts
         })
     
     def load_and_preprocess_data(self, input_file):
@@ -142,9 +151,9 @@ class ThroughputPlotter:
         """Get ordered list of index types present in data."""
         actual_indices = df['index_type'].unique()
         print(f"actual indices: {actual_indices}")
-        # desired_order = ['LiBox', 'ALEX+', 'ART+', 'LIPP+'] # for memory vs traces
+        desired_order = ['LiBox', 'ALEX+', 'ART+', 'LIPP+'] # for memory vs traces
         # desired_order = ['LiBox', 'ALEX+', 'LIPP+', 'ART+', 'XIndex', 'B+tree', 'LOFT'] # for basic type and read ratio
-        desired_order = ['LiBox', 'ALEX+', 'XIndex', 'B+tree'] # for range search type
+        # desired_order = ['LiBox', 'ALEX+', 'XIndex', 'B+tree', 'LOFT'] # for range search type
         return [idx for idx in desired_order if idx in actual_indices]
     
     def get_traces(self, df):
@@ -468,7 +477,7 @@ class ThroughputPlotter:
             
             # Set labels and formatting
             ax.set_xlabel("Inserted Keys (%)", fontsize=11)
-            if j % 3 == 0:  # Left column
+            if j == 0:  # Left column
                 ax.set_ylabel("Memory Consumption (GB)", fontsize=11)
                 
             # Add trace title
@@ -496,7 +505,7 @@ class ThroughputPlotter:
         
         self.save_figure(fig, output_file)
 
-    def plot_alpha_beta_analysis(self, df, output_file, trace_filter='genome'):
+    def plot_alpha_beta_analysis(self, df, output_file, trace_filter='planet'):
         """Generate Alpha and Beta analysis plots for LiBox only."""
         # Filter for specified trace pattern, thread_num=40, and LiBox only
         trace_pattern = trace_filter  # e.g., 'osm' will match 'osm_10_10', 'osm_20_10', etc.
@@ -613,7 +622,7 @@ class ThroughputPlotter:
                 ax1.set_ylabel('Throughput (Mop/s)', color='black', fontsize=11)
                 ax1_twin.set_ylabel('Memory (GB)', color='green', fontsize=11)
                 ax1.set_ylim(bottom=0)
-                ax1_twin.set_ylim(bottom=0, top=8)
+                ax1_twin.set_ylim(bottom=0, top=7)
                 ax1.set_xticks([5, 10, 20, 30, 40, 50])
                 
                 ax1.annotate('Alpha vs Performance & Memory', xy=(0.5, -0.2), xycoords='axes fraction', 
@@ -692,7 +701,7 @@ class ThroughputPlotter:
                 ax2.set_ylabel('Throughput (Mop/s)', color='black', fontsize=11)
                 ax2_twin.set_ylabel('Memory (GB)', color='green', fontsize=11)
                 ax2.set_ylim(bottom=0)
-                ax2_twin.set_ylim(bottom=0, top=8)
+                ax2_twin.set_ylim(bottom=0, top=7)
                 
                 # Add title to the bottom of subplot
                 ax2.annotate('Beta vs Performance & Memory', xy=(0.5, -0.2), xycoords='axes fraction', 
@@ -747,15 +756,81 @@ class ThroughputPlotter:
         plt.subplots_adjust(bottom=0.15, wspace=0.25, hspace=0.35)
         self.save_figure(fig, output_file)
 
+    def convert_to_pdfa_with_ghostscript(self, input_pdf, output_pdf):
+        """Convert PDF to PDF/A using Ghostscript."""
+        try:
+            cmd = [
+                'gs', 
+                '-dPDFA=1',  # PDF/A-1b compliance
+                '-dBATCH', 
+                '-dNOPAUSE',
+                '-sColorConversionStrategy=UseDeviceIndependentColor',
+                '-sDEVICE=pdfwrite',
+                '-dPDFACompatibilityPolicy=1',  # Convert non-compliant elements
+                f'-sOutputFile={output_pdf}',
+                input_pdf
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            print(f"Successfully converted to PDF/A: {output_pdf}")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Ghostscript conversion failed: {e}")
+            print(f"Error output: {e.stderr}")
+            return False
+        except FileNotFoundError:
+            print("Warning: Ghostscript not found. PDF/A conversion skipped.")
+            print("Install Ghostscript for full PDF/A compliance.")
+            return False
+
     def save_figure(self, fig, output_file):
-        """Save figure in both PDF and PNG formats."""
+        """Save figure in PDF/A format with proper metadata."""
         # Create output directory if it doesn't exist
         output_dir = os.path.dirname(output_file)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
         print(f"Saving figure to: {output_file}")
-        plt.savefig(output_file, bbox_inches='tight', dpi=self.dpi)
+        
+        if self.pdfa_compliance:
+            # Create PDF/A compliant metadata
+            pdf_metadata = {
+                'Title': 'Index Performance Analysis',
+                'Author': 'Performance Analysis System',
+                'Subject': 'Database Index Throughput and Memory Analysis',
+                'Creator': 'matplotlib',
+                'Producer': 'matplotlib PDF/A backend',
+                'CreationDate': datetime.now(),
+                'Keywords': 'database, index, performance, throughput'
+            }
+            
+            # Use PdfPages for better PDF/A compliance
+            with PdfPages(output_file, metadata=pdf_metadata) as pdf:
+                pdf.savefig(fig, bbox_inches='tight', dpi=self.dpi)
+                
+                # Add PDF/A specific information
+                d = pdf.infodict()
+                d['Title'] = pdf_metadata['Title']
+                d['Author'] = pdf_metadata['Author'] 
+                d['Subject'] = pdf_metadata['Subject']
+                d['Keywords'] = pdf_metadata['Keywords']
+                d['Creator'] = pdf_metadata['Creator']
+                d['Producer'] = pdf_metadata['Producer']
+        else:
+            # Standard PDF save
+            plt.savefig(output_file, bbox_inches='tight', dpi=self.dpi)
+        
+        # Try to convert to PDF/A using Ghostscript for maximum compliance
+        if self.pdfa_compliance:
+            temp_file = output_file.replace('.pdf', '_temp.pdf')
+            os.rename(output_file, temp_file)
+            
+            if self.convert_to_pdfa_with_ghostscript(temp_file, output_file):
+                os.remove(temp_file)
+                print(f"PDF/A conversion completed: {output_file}")
+            else:
+                # Fallback to original file if conversion fails
+                os.rename(temp_file, output_file)
+                print(f"Using matplotlib PDF (PDF/A features applied): {output_file}")
         
         # Also save as PNG
         png_output = output_file.replace('.pdf', '.png')
@@ -924,13 +999,14 @@ class ThroughputPlotter:
 
 def main():
     """Main function with argument parsing."""
-    parser = argparse.ArgumentParser(description='Generate various index performance plots')
+    parser = argparse.ArgumentParser(description='Generate various index performance plots with PDF/A compliance')
     parser.add_argument('--input', type=str, help='Input CSV file path')
     parser.add_argument('--output', type=str, help='Output file path (without extension)')
     parser.add_argument('--plot_type', type=str, default='basic',
                        choices=['basic', 'read_ratio', 'range_search', 'memory', 'alpha_beta', 'ycsbe', 'scan_length'],
                        help='Type of plot to generate (default: basic)')
     parser.add_argument('--dpi', type=int, default=600, help='DPI for the output figure (default: 600)')
+    parser.add_argument('--no-pdfa', action='store_true', help='Disable PDF/A compliance (default: PDF/A enabled)')
     
     args = parser.parse_args()
     
@@ -944,8 +1020,14 @@ def main():
     if args.output is None:
         args.output = f"../result/libox/graph_{args.plot_type}_{date_tag}"
     
-    # Initialize plotter
-    plotter = ThroughputPlotter(dpi=args.dpi)
+    # Initialize plotter with PDF/A compliance setting
+    pdfa_compliance = not args.no_pdfa
+    plotter = ThroughputPlotter(dpi=args.dpi, pdfa_compliance=pdfa_compliance)
+    
+    if pdfa_compliance:
+        print("PDF/A compliance enabled - output will be PDF/A compliant")
+    else:
+        print("PDF/A compliance disabled - standard PDF output")
     
     # Load and preprocess data
     df = plotter.load_and_preprocess_data(args.input)
