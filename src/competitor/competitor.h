@@ -18,7 +18,7 @@
 #include "finedex/finedex.h" */
 #include "iostream"
 #include "./libox/libox.h"
-#include "./loft/loft.h"
+// #include "./loft/loft.h"
 
 template<class KEY_TYPE, class PAYLOAD_TYPE>
 indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
@@ -77,9 +77,9 @@ indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
   else if (index_type == "libox") {
     index = new LiBoxInterface<KEY_TYPE, PAYLOAD_TYPE>;
   }
-  else if (index_type == "loft") {
-    index = new LOFTInterface<KEY_TYPE, PAYLOAD_TYPE>;
-  }
+  // else if (index_type == "loft") {
+  //   index = new LOFTInterface<KEY_TYPE, PAYLOAD_TYPE>;
+  // }
   else {
     std::cout << "Could not find a matching index called " << index_type << ".\n";
     exit(0);
