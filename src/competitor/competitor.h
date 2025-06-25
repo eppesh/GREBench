@@ -19,6 +19,7 @@
 #include "iostream"
 #include "./libox/libox.h"
 // #include "./loft/loft.h"
+#include "./hope/hopeapi.h"
 
 template<class KEY_TYPE, class PAYLOAD_TYPE>
 indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
@@ -80,6 +81,9 @@ indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
   // else if (index_type == "loft") {
   //   index = new LOFTInterface<KEY_TYPE, PAYLOAD_TYPE>;
   // }
+  else if (index_type == "hope") {
+    index = new HopeInterface<KEY_TYPE, PAYLOAD_TYPE>;
+  }
   else {
     std::cout << "Could not find a matching index called " << index_type << ".\n";
     exit(0);
