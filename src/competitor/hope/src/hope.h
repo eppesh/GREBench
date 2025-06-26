@@ -110,10 +110,23 @@ class Hope {
     };
 
    private:
-    static constexpr size_t kMinLineLength = 5;
+    static constexpr size_t kMinLineLength = 10;
     static constexpr double kDensityFactorHigh = 2.0;
     static constexpr double kDensityFactorLow = 0.5;
-    static constexpr size_t kMaxError = 32;
+    static constexpr size_t kMaxError = 64;
+
+    // Adaptive weights to tune the balance based on workload characteristics
+    // For write-heavy workloads: favor activity
+    static constexpr double kActivityWeight = 0.7;  // Favor recent activity
+    static constexpr double kSizeWeight = 0.3;      // But also consider size
+
+    /* // For read-heavy workloads: favor size
+    static constexpr double kActivityWeight = 0.3;
+    static constexpr double kSizeWeight = 0.7;
+
+    // For mixed workloads: balanced approach
+    static constexpr double kActivityWeight = 0.6;
+    static constexpr double kSizeWeight = 0.4; */
 
     std::vector<Segment> root_segments_;
     size_t node_capacity_;
@@ -126,6 +139,9 @@ class Hope {
           total_num_segments_(0),
           top_k_percentage_(top_k) {}
 
+    void SetNodeCapacity(size_t node_capacity) {
+        node_capacity_ = node_capacity;
+    }
     // Bulk loading
     void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num) {
         if (num == 0 || key_value == nullptr) return;
@@ -143,6 +159,11 @@ class Hope {
         // Step 2: Build tree structure
         total_num_segments_ = segments.size();
         root_segments_ = BuildTreeLevel(std::move(segments), node_capacity_);
+
+        // Debug Info
+        std::cout << "[BulkLoad] Total segments after bulk load: "
+                  << total_num_segments_
+                  << "; root segments:" << root_segments_.size() << std::endl;
     }
 
     // Insert a single key-value pair
@@ -497,9 +518,353 @@ class Hope {
         }
     }
 
+    ///////////////////////////////
+    // Insert functions
+
     bool InsertIntoSegments(std::vector<Segment>& segments, KeyType key,
                             const ValueType& value) {
+        /* std::cout << "[InsertIntoSegments] key=" << key
+                  << ", segments[0].start=" << segments.front().start
+                  << ", segments.back().start=" << segments.back().start
+                  << std::endl; */
+        if (segments.empty()) {
+            // Insert the key-value as a point-segment
+            return InsertNewPointSegment(segments, key, value);
+        }
+
+        auto segment_it = FindSegmentMutable(segments, key);
+        if (segment_it != segments.end()) {
+            segment_it->insert_count++;
+
+            if (segment_it->children) {
+                // std::cout << "[InsertIntoSegments] children" << std::endl;
+                bool result =
+                    InsertIntoSegments(*segment_it->children, key, value);
+                // Check if retrain is needed
+                /* std::cout
+                    << "[InsertIntoSegments] before shouldRetrain, result="
+                    << result << std::endl; */
+                if (ShouldRetrain(*segment_it)) {
+                    size_t segment_idx =
+                        std::distance(segments.begin(), segment_it);
+                    RetrainSegmentAndNeighbors(segments, segment_idx);
+                }
+                /* std::cout << "[InsertIntoSegments] before return: result="
+                          << result << std::endl; */
+                return result;
+            } else {
+                return InsertIntoLeafSegment(*segment_it, key, value);
+            }
+        }
+
+        // Key doesn't fall in any existing segment - create new point segment
+        return InsertNewPointSegment(segments, key, value);
+    }
+
+    bool ShouldRetrain(const Segment& segment) {
+        /* std::cout << "[ShouldRetrain] segment.start=" << segment.start
+                  << std::endl; */
+        // Skip retraining for very small segments or segments with no activity
+        if (segment.num_keys_covered < 10 || segment.insert_count == 0) {
+            return false;
+        }
+        // Calculate relative density: insertions as percentage of original size
+        double relative_density = static_cast<double>(segment.insert_count) /
+                                  static_cast<double>(segment.num_keys_covered);
+        // Retrain if insertions changed segment by more than 20%
+        if (relative_density > 0.2) {
+            return true;
+        }
+        return false;
+    }
+
+    void RetrainSegmentAndNeighbors(std::vector<Segment>& segments,
+                                    size_t segment_idx) {
+        /* std::cout << "[RetrainSegmentAndNeighbors] segment_idx=" << segment_idx
+                  << ", segments[segment_idx].start="
+                  << segments[segment_idx].start << std::endl; */
+        // Select 3 segments: target + left/right neighbors
+        size_t start_idx = (segment_idx > 0) ? segment_idx - 1 : segment_idx;
+        size_t end_idx = std::min(segment_idx + 1, segments.size() - 1);
+        // If we can't get 3 segments, adjust range
+        if (end_idx - start_idx < 2 && segments.size() >= 3) {
+            if (start_idx == 0) {
+                end_idx = std::min(size_t(2), segments.size() - 1);
+            } else if (end_idx == segments.size() - 1) {
+                start_idx = std::max(int(end_idx) - 2, 0);
+            }
+        }
+        // Collect all data from the segments to retrain
+        std::vector<std::pair<KeyType, ValueType>> retrain_data;
+        CollectDataFromSegmentRange(segments, start_idx, end_idx, retrain_data);
+
+        // Calculate temp node capacity based on density
+        double avg_segments_per_node =
+            static_cast<double>(total_num_segments_) / node_capacity_;
+        size_t temp_node_capacity =
+            4;  // from 3 segments to at most 4 segments after retraining
+
+        // Retrain using bulk loading algorithm
+        SortAndDeduplicate(retrain_data);
+        std::vector<Segment> new_segments =
+            FindLinesAndCreateSegments(retrain_data);
+        if (new_segments.size() > temp_node_capacity) {
+            new_segments =
+                BuildTreeLevel(std::move(new_segments), temp_node_capacity);
+        }
+        // Reset insert counts
+        for (auto& seg : new_segments) {
+            seg.insert_count = 0;
+        }
+        // Replace old segments with new ones
+        ReplaceSegmentRange(segments, start_idx, end_idx,
+                            std::move(new_segments));
+    }
+
+    // Custom binary search for insertion position in segments array
+    size_t FindInsertionPositionInSegments(const std::vector<Segment>& segments,
+                                           KeyType key) const {
+        size_t left = 0;
+        size_t right = segments.size();
+
+        // Find the position where key should be inserted to maintain sorted
+        // order
+        while (left < right) {
+            size_t mid = left + (right - left) / 2;
+            if (segments[mid].start < key) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        return left;
+    }
+
+    bool InsertNewPointSegment(std::vector<Segment>& segments, KeyType key,
+                               const ValueType& value) {
+        /* std::cout << "[InsertNewPointSegment] segments.front().start="
+                  << segments.front().start
+                  << ",segments.back().end=" << segments.back().end
+                  << ", key=" << key << std::endl; */
+        Segment point_segment;
+        point_segment.start = key;
+        point_segment.end = key;
+        point_segment.is_line = false;
+        point_segment.data.emplace_back(key, value);
+        point_segment.num_keys_covered = 1;
+
+        // insert the point_segment into segments in sorted order
+        auto insert_pos = FindInsertionPositionInSegments(segments, key);
+        segments.insert(segments.begin() + insert_pos,
+                        std::move(point_segment));
+        total_num_segments_++;
+
+        // Check if node capacity exceeded
+        if (segments.size() > node_capacity_) {
+            RebalanceNode(segments);
+        }
+        
         return true;
+    }
+
+    bool InsertIntoLeafSegment(Segment& segment, KeyType key,
+                               const ValueType& value) {
+        double estimated_pos = EstimatePositionInSegment(segment, key);
+        /* std::cout << "[InsertIntoLeafSegment] segment.start=" << segment.start
+                  << ",segment.end=" << segment.end << ", key=" << key
+                  << ", estimated_pos=" << estimated_pos << std::endl; */
+        if (estimated_pos >= 0) {
+            return InsertWithEstimatedPosition(segment, key, value,
+                                               estimated_pos);
+        } else {
+            return InsertWithBinarySearch(segment, key, value);
+        }
+    }
+
+    bool InsertWithEstimatedPosition(Segment& segment, KeyType key,
+                                     const ValueType& value,
+                                     double estimated_pos) {
+        /* std::cout << "[InsertWithEstimatedPosition] segment.start="
+                  << segment.start << ",segment.end=" << segment.end
+                  << ", key=" << key << ", estimated_pos=" << estimated_pos
+                  << std::endl; */
+        size_t estimate = static_cast<size_t>(std::round(estimated_pos));
+        // Calculate search bounds for existing key check
+        size_t begin = (estimate < kMaxError) ? 0 : (estimate - kMaxError);
+        size_t end = std::min(estimate + kMaxError + 1, segment.data.size());
+
+        // Find insertion pos using binary search in local range
+        size_t insert_pos = SearchInRange(segment.data, key, begin, end);
+
+        // Check if key already exists in the estimated range
+        if (insert_pos < end && segment.data[insert_pos].first == key) {
+            segment.data[insert_pos].second = value;  // update existing
+            return true;
+        }
+
+        // If key is beyond local range, do full search
+        if (insert_pos == end && end < segment.data.size() &&
+            segment.data[end].first < key) {
+            insert_pos = SearchInData(segment.data, key);
+            // Check for exact match in full search
+            if (insert_pos < segment.data.size() &&
+                segment.data[insert_pos].first == key) {
+                segment.data[insert_pos].second = value;
+                return true;
+            }
+        }
+
+        segment.data.insert(segment.data.begin() + insert_pos,
+                            std::make_pair(key, value));
+        segment.num_keys_covered++;
+
+        // Udpate segment boundaries
+        if (key < segment.start) {
+            segment.start = key;
+        }
+        if (key > segment.end) {
+            segment.end = key;
+        }
+        return true;
+    }
+
+    bool InsertWithBinarySearch(Segment& segment, KeyType key,
+                                const ValueType& value) {
+        /* std::cout << "[InsertWithBinarySearch] segment.start=" << segment.start
+                  << ",segment.end=" << segment.end << ", key=" << key
+                  << std::endl; */
+        size_t pos = SearchInData(segment.data, key);
+        if (pos < segment.data.size() && segment.data[pos].first == key) {
+            segment.data[pos].second = value;  // Update existing
+            return true;
+        }
+        // Insert new key-value pair
+        segment.data.insert(segment.data.begin() + pos,
+                            std::make_pair(key, value));
+        segment.num_keys_covered++;
+        // Udpate segment boundaries
+        if (key < segment.start) {
+            segment.start = key;
+        }
+        if (key > segment.end) {
+            segment.end = key;
+        }
+        return true;
+    }
+
+    //////////////////////////////////
+    // Retrain / Rebalance functions
+    void RebalanceNode(std::vector<Segment>& segments) {
+        if (segments.size() <= node_capacity_) {
+            return;
+        }
+        // Find 3 consecutive segments with least total density
+        size_t best_start = 0;
+        double min_score = std::numeric_limits<double>::max();
+        for (size_t i = 0; i <= segments.size() - 3; ++i) {
+            double total_score = CalculateSegmentScore(segments[i]) +
+                                 CalculateSegmentScore(segments[i + 1]) +
+                                 CalculateSegmentScore(segments[i + 2]);
+            if (total_score < min_score) {
+                min_score = total_score;
+                best_start = i;
+            }
+        }
+
+        // Push down these 3 segments
+        std::vector<std::pair<KeyType, ValueType>> pushdown_data;
+        CollectDataFromSegmentRange(segments, best_start, best_start + 2,
+                                    pushdown_data);
+        SortAndDeduplicate(pushdown_data);
+        std::vector<Segment> child_segments =
+            FindLinesAndCreateSegments(pushdown_data);
+
+        // Create representation segment
+        Segment repr_segment;
+        repr_segment.start = segments[best_start].start;
+        repr_segment.end = segments[best_start + 2].end;
+        repr_segment.is_line = false;
+        repr_segment.num_keys_covered = pushdown_data.size();
+        repr_segment.children =
+            std::make_unique<std::vector<Segment>>(std::move(child_segments));
+
+        // Replace 3 segments with 1 representation
+        ReplaceSegmentRange(segments, best_start, best_start + 2,
+                            {std::move(repr_segment)});
+    }
+
+    // Hybrid scoring function that considers both size and activity
+    double CalculateSegmentScore(const Segment& segment) const {
+        // Normalize metrics
+        double avg_segments_per_node =
+            static_cast<double>(total_num_segments_) /
+            node_capacity_;  // TODO: total_num_segments_ includes subtrees
+        double max_keys_per_segment =
+            node_capacity_ * 10;  // Estimated reasonable max
+
+        // Activity score (0.0 to 1.0, higher = more active)
+        double activity_score =
+            std::min(1.0, segment.insert_count / (2.0 * avg_segments_per_node));
+
+        // Size score (0.0 to 1.0, higher = larger)
+        double size_score =
+            std::min(1.0, segment.num_keys_covered / max_keys_per_segment);
+
+        // Combined score: weight both factors
+        // Higher score = more important to keep at top level
+        // Lower score = good candidate for pushing down
+
+        return kActivityWeight * activity_score + kSizeWeight * size_score;
+    }
+
+    // Alternative: Simple weighted approach
+    double CalculateSegmentScoreSimple(const Segment& segment) const {
+        // Simple formula: recent_activity + size_factor
+        double size_factor = std::log(segment.num_keys_covered +
+                                      1);  // Logarithmic to avoid domination
+        double activity_factor = segment.insert_count;
+
+        return activity_factor +
+               0.1 * size_factor;  // Activity weighted 10x more than size
+    }
+
+    void CollectDataFromSegmentRange(
+        const std::vector<Segment>& segments, size_t start_idx, size_t end_idx,
+        std::vector<std::pair<KeyType, ValueType>>& data) {
+        for (size_t i = start_idx; i <= end_idx; ++i) {
+            CollectDataFromSegment(segments[i], data);
+        }
+    }
+
+    void CollectDataFromSegment(
+        const Segment& segment,
+        std::vector<std::pair<KeyType, ValueType>>& data) {
+        if (segment.children) {
+            for (const auto& child : *(segment.children)) {
+                CollectDataFromSegment(child, data);
+            }
+        } else {
+            data.insert(data.end(), segment.data.begin(), segment.data.end());
+        }
+    }
+
+    void ReplaceSegmentRange(std::vector<Segment>& segments, size_t start_idx,
+                             size_t end_idx,
+                             std::vector<Segment> new_segments) {
+        /* std::cout << "[ReplaceSegmentRange] start_idx=" << start_idx
+                  << ",end_idx=" << end_idx << std::endl; */
+        size_t old_count = end_idx - start_idx + 1;
+        size_t new_count = new_segments.size();
+        // Update total segment count
+        total_num_segments_ = total_num_segments_ - old_count + new_count;
+        // Replace the range
+        auto start_it = segments.begin() + start_idx;
+        auto end_it = segments.begin() + end_idx + 1;
+        segments.erase(start_it, end_it);
+        segments.insert(segments.begin() + start_idx,
+                        std::make_move_iterator(new_segments.begin()),
+                        std::make_move_iterator(new_segments.end()));
     }
 
    private:
@@ -534,6 +899,9 @@ class Hope {
         return segments.end();
     }
 
+    // Binary search for segment insertion
+    // Find the last segment whose start <= key; check if the key is within that
+    // segment's [start,end] range
     typename std::vector<Segment>::iterator FindSegmentMutable(
         std::vector<Segment>& segments, KeyType key) {
         if (segments.empty()) return segments.end();
@@ -646,7 +1014,7 @@ class Hope {
         }
 
         // Use spline interpolation to estimate position
-        double estimated_pos = EstimatePosition(segment, key);
+        double estimated_pos = EstimatePositionInSegment(segment, key);
 
         if (estimated_pos >= 0) {
             // Local search with error bounds using binary search
@@ -697,7 +1065,8 @@ class Hope {
         return false;
     }
 
-    double EstimatePosition(const Segment& segment, KeyType key) const {
+    double EstimatePositionInSegment(const Segment& segment,
+                                     KeyType key) const {
         // Use slope and intercept: y = ax + b
         if (std::abs(segment.slope) > 1e-10) {
             double pos = segment.slope * key + segment.intercept;

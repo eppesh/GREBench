@@ -13,7 +13,7 @@ class HopeInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
     }
 
     void init(Param *param = nullptr) {
-        
+        hope_.SetNodeCapacity(param->node_capacity);
     }
 
     void bulk_load(std::pair<KEY_TYPE, PAYLOAD_TYPE> *key_value, size_t num,

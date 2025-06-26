@@ -55,6 +55,7 @@ class Benchmark {
     bool latency_sample = false;
     double latency_sample_ratio = 0.01;
     int error_bound;
+    size_t node_capacity;
     std::string output_path;
     size_t random_seed;
     bool memory_record;
@@ -171,7 +172,7 @@ public:
         index = get_index<KEY_TYPE, PAYLOAD_TYPE>(index_type);
 
         // initilize Index (sort keys first)
-        Param param = Param(thread_num, 0, config_file);
+        Param param = Param(thread_num, 0, node_capacity, config_file);
         index->init(&param);
 
         // deal with the background thread case
@@ -223,6 +224,7 @@ public:
         latency_sample = get_boolean_flag(flags, "latency_sample");
         latency_sample_ratio = stod(get_with_default(flags, "latency_sample_ratio", "0.01"));
         error_bound = stoi(get_with_default(flags, "error_bound", "64"));
+        node_capacity = stoul(get_with_default(flags, "node_capacity", "1000"));
         output_path = get_with_default(flags, "output_path", "./out.csv");
         random_seed = stoul(get_with_default(flags, "seed", "1866"));
         gen.seed(random_seed);
@@ -314,7 +316,7 @@ public:
         {
             // thread specifier
             auto thread_id = omp_get_thread_num();
-            auto paramI = Param(thread_num, thread_id);
+            auto paramI = Param(thread_num, thread_id, node_capacity);
             // Latency Sample Variable
             int latency_sample_interval = operations_num / (operations_num * latency_sample_ratio);
             auto latency_sample_start_time = tn.rdtsc();

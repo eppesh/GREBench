@@ -5,9 +5,10 @@
 struct Param { // for xindex
   size_t worker_num;
   uint32_t thread_id;
+  size_t node_capacity=1000;
   std::string config_file;
 
-  Param(size_t worker_num, uint32_t thread_id, std::string config="") : worker_num(worker_num), thread_id(thread_id), config_file(config) {}
+  Param(size_t worker_num, uint32_t thread_id, int node_capacity, std::string config="") : worker_num(worker_num), thread_id(thread_id), node_capacity(node_capacity), config_file(config) {}
 };
 
 struct BaseCompare {
