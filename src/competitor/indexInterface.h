@@ -5,8 +5,15 @@
 struct Param { // for xindex
   size_t worker_num;
   uint32_t thread_id;
-  size_t node_capacity=1000;
-  std::string config_file;
+  std::string config_file; // for libox
+  
+  // hope parameters
+  size_t node_capacity=1000; // for hope
+  double top_k=0.05;
+  // lisa parameters
+  size_t num_radix_bits=18;
+  size_t max_error=32;
+  size_t alpha=10; // min line length
 
   Param(size_t worker_num, uint32_t thread_id, int node_capacity, std::string config="") : worker_num(worker_num), thread_id(thread_id), node_capacity(node_capacity), config_file(config) {}
 };

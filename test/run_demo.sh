@@ -7,7 +7,7 @@ THREAD_NUM=1
 
 # Determine index list based on thread number
 if [[ "$THREAD_NUM" -eq 1 ]]; then
-    INDEX_LIST="hope,alex,lipp"
+    INDEX_LIST="hope,alex,lipp,lisa"
 else
     INDEX_LIST="alexol,btreeolc,libox,xindex"
 fi

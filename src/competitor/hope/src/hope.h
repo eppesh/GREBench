@@ -110,10 +110,8 @@ class Hope {
     };
 
    private:
-    static constexpr size_t kMinLineLength = 10;
     static constexpr double kDensityFactorHigh = 2.0;
     static constexpr double kDensityFactorLow = 0.5;
-    static constexpr size_t kMaxError = 64;
 
     // Adaptive weights to tune the balance based on workload characteristics
     // For write-heavy workloads: favor activity
@@ -129,18 +127,29 @@ class Hope {
     static constexpr double kSizeWeight = 0.4; */
 
     std::vector<Segment> root_segments_;
-    size_t node_capacity_;
     size_t total_num_segments_;  // Number of segments in the whole index
+
+    // Parameters
+    size_t node_capacity_;
     double top_k_percentage_;
+    size_t max_error_ = 32;
+    size_t min_line_length_ = 10;
 
    public:
-    Hope(size_t node_capacity = 100, double top_k = 0.05)
+    Hope(size_t node_capacity = 100, double top_k = 0.05, size_t max_error = 32,
+         size_t min_line_len = 10)
         : node_capacity_(node_capacity),
           total_num_segments_(0),
-          top_k_percentage_(top_k) {}
+          top_k_percentage_(top_k),
+          max_error_(max_error),
+          min_line_length_(min_line_len) {}
 
-    void SetNodeCapacity(size_t node_capacity) {
+    void SetParameters(size_t node_capacity, double top_k, size_t max_error,
+                       size_t min_line_length) {
         node_capacity_ = node_capacity;
+        top_k_percentage_ = top_k;
+        max_error_ = max_error;
+        min_line_length_ = min_line_length;
     }
     // Bulk loading
     void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num) {
@@ -225,7 +234,7 @@ class Hope {
 
             // Try to find a line starting from position i
             size_t line_end = FindLongestLine(data, i);
-            if (line_end - i + 1 >= kMinLineLength) {
+            if (line_end - i + 1 >= min_line_length_) {
                 Segment line_segment;
                 line_segment.start = data[i].first;
                 line_segment.end = data[line_end].first;
@@ -327,8 +336,8 @@ class Hope {
             auto spline_segments =
                 spline_utils::CreateSplineSegments<KeyType, ValueType>(
                     non_line_data,
-                    kMaxError);  // max_error = 32, similar to RadixSpline
-                                 // default
+                    max_error_);  // max_error = 32, similar to RadixSpline
+                                  // default
 
             // Convert spline_utils::SplineSegment to our Segment format
             for (const auto& spline_seg : spline_segments) {
@@ -580,7 +589,8 @@ class Hope {
 
     void RetrainSegmentAndNeighbors(std::vector<Segment>& segments,
                                     size_t segment_idx) {
-        /* std::cout << "[RetrainSegmentAndNeighbors] segment_idx=" << segment_idx
+        /* std::cout << "[RetrainSegmentAndNeighbors] segment_idx=" <<
+           segment_idx
                   << ", segments[segment_idx].start="
                   << segments[segment_idx].start << std::endl; */
         // Select 3 segments: target + left/right neighbors
@@ -664,14 +674,15 @@ class Hope {
         if (segments.size() > node_capacity_) {
             RebalanceNode(segments);
         }
-        
+
         return true;
     }
 
     bool InsertIntoLeafSegment(Segment& segment, KeyType key,
                                const ValueType& value) {
         double estimated_pos = EstimatePositionInSegment(segment, key);
-        /* std::cout << "[InsertIntoLeafSegment] segment.start=" << segment.start
+        /* std::cout << "[InsertIntoLeafSegment] segment.start=" <<
+           segment.start
                   << ",segment.end=" << segment.end << ", key=" << key
                   << ", estimated_pos=" << estimated_pos << std::endl; */
         if (estimated_pos >= 0) {
@@ -691,8 +702,8 @@ class Hope {
                   << std::endl; */
         size_t estimate = static_cast<size_t>(std::round(estimated_pos));
         // Calculate search bounds for existing key check
-        size_t begin = (estimate < kMaxError) ? 0 : (estimate - kMaxError);
-        size_t end = std::min(estimate + kMaxError + 1, segment.data.size());
+        size_t begin = (estimate < max_error_) ? 0 : (estimate - max_error_);
+        size_t end = std::min(estimate + max_error_ + 1, segment.data.size());
 
         // Find insertion pos using binary search in local range
         size_t insert_pos = SearchInRange(segment.data, key, begin, end);
@@ -731,7 +742,8 @@ class Hope {
 
     bool InsertWithBinarySearch(Segment& segment, KeyType key,
                                 const ValueType& value) {
-        /* std::cout << "[InsertWithBinarySearch] segment.start=" << segment.start
+        /* std::cout << "[InsertWithBinarySearch] segment.start=" <<
+           segment.start
                   << ",segment.end=" << segment.end << ", key=" << key
                   << std::endl; */
         size_t pos = SearchInData(segment.data, key);
@@ -1032,8 +1044,8 @@ class Hope {
         size_t estimate = static_cast<size_t>(std::round(estimated_pos));
 
         // Calculate search bounds
-        size_t begin = (estimate < kMaxError) ? 0 : (estimate - kMaxError);
-        size_t end = std::min(estimate + kMaxError + 1, segment.data.size());
+        size_t begin = (estimate < max_error_) ? 0 : (estimate - max_error_);
+        size_t end = std::min(estimate + max_error_ + 1, segment.data.size());
 
         // First check the estimated position
         if (estimate < segment.data.size() &&

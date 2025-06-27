@@ -56,6 +56,10 @@ class Benchmark {
     double latency_sample_ratio = 0.01;
     int error_bound;
     size_t node_capacity;
+    double top_k=0.05;
+    size_t num_radix_bits;
+    size_t max_error_rs;
+    size_t alpha_libox;
     std::string output_path;
     size_t random_seed;
     bool memory_record;
@@ -173,6 +177,10 @@ public:
 
         // initilize Index (sort keys first)
         Param param = Param(thread_num, 0, node_capacity, config_file);
+        param.top_k = top_k;
+        param.num_radix_bits=num_radix_bits;
+        param.max_error=max_error_rs;
+        param.alpha=alpha_libox;
         index->init(&param);
 
         // deal with the background thread case
@@ -225,6 +233,10 @@ public:
         latency_sample_ratio = stod(get_with_default(flags, "latency_sample_ratio", "0.01"));
         error_bound = stoi(get_with_default(flags, "error_bound", "64"));
         node_capacity = stoul(get_with_default(flags, "node_capacity", "1000"));
+        top_k = stod(get_with_default(flags, "top_k", "0.05"));
+        num_radix_bits = stoul(get_with_default(flags, "num_radix_bits", "18"));
+        max_error_rs = stoul(get_with_default(flags, "max_error_rs", "32"));
+        alpha_libox = stoul(get_with_default(flags, "alpha_libox", "10"));
         output_path = get_with_default(flags, "output_path", "./out.csv");
         random_seed = stoul(get_with_default(flags, "seed", "1866"));
         gen.seed(random_seed);

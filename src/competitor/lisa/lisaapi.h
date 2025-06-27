@@ -1,17 +1,24 @@
 #include "../indexInterface.h"
-#include "./src/hope.h"
+#include "./src/lisa.h"
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-class HopeInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
+class LisaInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
    public:
-    HopeInterface() {}
-
-    ~HopeInterface() {}
-
-    void init(Param *param = nullptr) {
-        hope_.SetParameters(param->node_capacity, param->top_k,
-                            param->max_error, param->alpha);
+    LisaInterface() {
+        std::pair<KEY_TYPE, PAYLOAD_TYPE> min_key = std::make_pair(0, 0);
+        std::pair<KEY_TYPE, PAYLOAD_TYPE> max_key = std::make_pair(0, 0);
+        lisa_ = new lisa::LISA<KEY_TYPE, PAYLOAD_TYPE>(min_key, max_key, 18, 32,
+                                                       10);
     }
+
+    ~LisaInterface() {
+        if (lisa_) {
+            delete lisa_;
+            lisa_ = nullptr;
+        }
+    }
+
+    void init(Param *param = nullptr) {}
 
     void bulk_load(std::pair<KEY_TYPE, PAYLOAD_TYPE> *key_value, size_t num,
                    Param *param = nullptr);
@@ -31,44 +38,46 @@ class HopeInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
     long long memory_consumption() { return 0; }
 
    private:
-    hopens::Hope<KEY_TYPE, PAYLOAD_TYPE> hope_;
+    lisa::LISA<KEY_TYPE, PAYLOAD_TYPE> *lisa_;
 };
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-void HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(
+void LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(
     std::pair<KEY_TYPE, PAYLOAD_TYPE> *key_value, size_t num, Param *param) {
-    hope_.BulkLoad(key_value, num);
+    lisa_->SetParameters(key_value[0], key_value[num - 1],
+                         param->num_radix_bits, param->max_error, param->alpha);
+    lisa_->bulk_load(key_value, num);
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-bool HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::get(KEY_TYPE key, PAYLOAD_TYPE &val,
+bool LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::get(KEY_TYPE key, PAYLOAD_TYPE &val,
                                                 Param *param) {
-    auto res = hope_.Lookup(key, val);
+    auto res = lisa_->Lookup(key, val);
     return res;
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-bool HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::put(KEY_TYPE key,
+bool LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::put(KEY_TYPE key,
                                                 PAYLOAD_TYPE value,
                                                 Param *param) {
-    auto res = hope_.Insert(key, value);
+    auto res = lisa_->Insert(std::make_pair(key, value));
     return res;
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-bool HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::update(KEY_TYPE key,
+bool LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::update(KEY_TYPE key,
                                                    PAYLOAD_TYPE value,
                                                    Param *param) {
     return false;
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-bool HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::remove(KEY_TYPE key, Param *param) {
+bool LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::remove(KEY_TYPE key, Param *param) {
     return false;
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
-size_t HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::scan(
+size_t LisaInterface<KEY_TYPE, PAYLOAD_TYPE>::scan(
     KEY_TYPE key_low_bound, size_t key_num,
     std::pair<KEY_TYPE, PAYLOAD_TYPE> *result, Param *param) {
     return 0;
