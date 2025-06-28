@@ -79,6 +79,9 @@ class LISA {
 
         build_model(data_, spline_points_, radix_table_);
         data_.clear();
+        std::cout << "[Lisa bulk load] # of segment:" << spline_points_.size()-1 << std::endl;
+
+        //SaveLinesInfoToFile("lisa_segment.csv", false);
     }
 
     bool Lookup(const KeyType& key) {

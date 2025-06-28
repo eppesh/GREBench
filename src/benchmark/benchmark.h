@@ -59,7 +59,7 @@ class Benchmark {
     double top_k=0.05;
     size_t num_radix_bits;
     size_t max_error_rs;
-    size_t alpha_libox;
+    size_t min_line_len;
     std::string output_path;
     size_t random_seed;
     bool memory_record;
@@ -180,7 +180,7 @@ public:
         param.top_k = top_k;
         param.num_radix_bits=num_radix_bits;
         param.max_error=max_error_rs;
-        param.alpha=alpha_libox;
+        param.alpha=min_line_len;
         index->init(&param);
 
         // deal with the background thread case
@@ -236,7 +236,7 @@ public:
         top_k = stod(get_with_default(flags, "top_k", "0.05"));
         num_radix_bits = stoul(get_with_default(flags, "num_radix_bits", "18"));
         max_error_rs = stoul(get_with_default(flags, "max_error_rs", "32"));
-        alpha_libox = stoul(get_with_default(flags, "alpha_libox", "10"));
+        min_line_len = stoul(get_with_default(flags, "min_line_len", "10"));
         output_path = get_with_default(flags, "output_path", "./out.csv");
         random_seed = stoul(get_with_default(flags, "seed", "1866"));
         gen.seed(random_seed);
@@ -355,6 +355,7 @@ public:
                     auto ret = index->get(key, val, &paramI);
                     if(!ret) {
                         printf("read not found, Key %lu\n",key);
+                        exit(1);
                         continue;
                     }
                     if(val != key) {

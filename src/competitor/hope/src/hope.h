@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <iostream>  // std::setprecision(n), std::fixed
 #include <memory>
+#include <random>
 #include <unordered_map>
 #include <vector>
 
@@ -20,18 +23,24 @@ class Hope {
         KeyType end;
         bool is_line;
         std::vector<std::pair<KeyType, ValueType>> data;
-        KeyType step;  // if it's line
-        double slope = 0.0;
+        KeyType step;        // if it's line
+        double slope = 0.0;  // Used for quickly locating key in data
         double intercept = 0.0;
 
         // Tree structure fields
         std::unique_ptr<std::vector<Segment>> children;
-        size_t num_keys_covered =
-            0;  // Number of original keys this segment covers
+        // Number of original keys this segment covers
+        size_t num_keys_covered = 0;
 
         // Density tracking for retraining
-        size_t insert_count =
-            0;  // Number of insertions in this segment since last retrain
+        // Number of insertions in this segment since last retrain
+        size_t insert_count = 0;
+
+        // Hierarchical indexing for children
+        std::vector<int> child_seg_index;
+        // child_slope - used for quickly locating segment in children
+        double child_slope = 0.0;
+        double child_intercept = 0.0;
 
         Segment() : start(0), end(0), is_line(false), step(0) {}
 
@@ -49,7 +58,10 @@ class Hope {
               intercept(other.intercept),
               children(std::move(other.children)),
               num_keys_covered(other.num_keys_covered),
-              insert_count(other.insert_count) {}
+              insert_count(other.insert_count),
+              child_seg_index(std::move(other.child_seg_index)),
+              child_slope(other.child_slope),
+              child_intercept(other.child_intercept) {}
 
         // Move assignment operator
         Segment& operator=(Segment&& other) noexcept {
@@ -64,6 +76,9 @@ class Hope {
                 children = std::move(other.children);
                 num_keys_covered = other.num_keys_covered;
                 insert_count = other.insert_count;
+                child_seg_index = std::move(other.child_seg_index);
+                child_slope = other.child_slope;
+                child_intercept = other.child_intercept;
             }
             return *this;
         }
@@ -78,7 +93,10 @@ class Hope {
               slope(other.slope),
               intercept(other.intercept),
               num_keys_covered(other.num_keys_covered),
-              insert_count(other.insert_count) {
+              insert_count(other.insert_count),
+              child_seg_index(other.child_seg_index),
+              child_slope(other.child_slope),
+              child_intercept(other.child_intercept) {
             if (other.children) {
                 children =
                     std::make_unique<std::vector<Segment>>(*other.children);
@@ -97,6 +115,9 @@ class Hope {
                 intercept = other.intercept;
                 num_keys_covered = other.num_keys_covered;
                 insert_count = other.insert_count;
+                child_seg_index = other.child_seg_index;
+                child_slope = other.child_slope;
+                child_intercept = other.child_intercept;
 
                 if (other.children) {
                     children =
@@ -128,6 +149,18 @@ class Hope {
 
     std::vector<Segment> root_segments_;
     size_t total_num_segments_;  // Number of segments in the whole index
+
+    // Root-level indexing
+    double root_slope_ = 0.0;
+    double root_intercept_ = 0.0;
+    std::vector<int> root_seg_index_;  // index for root segments
+    // std::vector<uint32_t> root_radix_table_;  // method2 for root segments
+    // index
+
+    // Key range for bounds checking
+    KeyType min_key_;
+    KeyType max_key_;
+    bool key_range_initialized_ = false;
 
     // Parameters
     size_t node_capacity_;
@@ -162,6 +195,13 @@ class Hope {
         // Step 0: Sort and deduplicate
         SortAndDeduplicate(data);
 
+        // Initialize key range
+        if (!data.empty()) {
+            min_key_ = data.front().first;
+            max_key_ = data.back().first;
+            key_range_initialized_ = true;
+        }
+
         // Step 1: Find lines (arithmetic sequences)
         std::vector<Segment> segments = FindLinesAndCreateSegments(data);
 
@@ -169,14 +209,20 @@ class Hope {
         total_num_segments_ = segments.size();
         root_segments_ = BuildTreeLevel(std::move(segments), node_capacity_);
 
+        // Step 3: Build hierarchical indexing
+        BuildHierarchicalIndex();
+
         // Debug Info
-        std::cout << "[BulkLoad] Total segments after bulk load: "
-                  << total_num_segments_
+        std::cout << "[BulkLoad] min_key=" << min_key_
+                  << ", max_key=" << max_key_
+                  << "; total segments after bulk load:" << total_num_segments_
                   << "; root segments:" << root_segments_.size() << std::endl;
+        PrintTree();
     }
 
     // Insert a single key-value pair
     bool Insert(KeyType key, const ValueType& value) {
+        UpdateKeyRange(key);
         return InsertIntoSegments(root_segments_, key, value);
     }
 
@@ -190,10 +236,269 @@ class Hope {
     size_t GetTotalSegmentCount() const { return total_num_segments_; }
 
     void PrintTree(int depth = 0) const {
-        PrintSegments(root_segments_, depth);
+        std::ofstream ofs("hope_segments_info.log");
+        PrintSegments(root_segments_, depth, ofs);
+        ofs.close();
     }
 
    private:
+    // Update key range when new keys are inserted
+    void UpdateKeyRange(KeyType key) {
+        if (!key_range_initialized_) {
+            min_key_ = key;
+            max_key_ = key;
+            key_range_initialized_ = true;
+        } else {
+            if (key < min_key_) {
+                min_key_ = key;
+            }
+            if (key > max_key_) {
+                max_key_ = key;
+            }
+        }
+    }
+
+    // Build hierarchical indexing for all levels
+    void BuildHierarchicalIndex() {
+        BuildSegmentIndexForLevel(root_segments_, root_seg_index_, root_slope_,
+                                  root_intercept_);
+        BuildChildIndicesRecursively(root_segments_);
+    }
+
+    // Build segment index for a specific level
+    void BuildSegmentIndexForLevel(const std::vector<Segment>& segments,
+                                   std::vector<int>& seg_index, double& slope,
+                                   double& intercept) {
+        if (segments.empty()) {
+            return;
+        }
+        size_t redundant_size = segments.size() * 90;  // 90x redundancy
+        seg_index.resize(redundant_size, -1);
+
+        KeyType start_key = segments.front().start;
+        KeyType end_key = segments.back().start;
+
+        if (end_key > start_key) {
+            slope =
+                static_cast<double>(redundant_size - 1) / (end_key - start_key);
+            intercept = -slope * start_key;
+        } else {
+            slope = 0.0;
+            intercept = 0.0;
+        }
+
+        // Fill the index array
+        for (size_t i = 0; i < segments.size(); ++i) {
+            int64_t position =
+                static_cast<int64_t>(slope * (segments[i].start) + intercept);
+            if (position >= 0 && position < redundant_size) {
+                seg_index[position] = static_cast<int>(i);
+            }
+        }
+
+        // Fill gaps with nearest valid indices
+        int last_valid_index = 0;
+        for (size_t i = 0; i < redundant_size; ++i) {
+            if (seg_index[i] == -1) {
+                seg_index[i] = last_valid_index;
+            } else {
+                last_valid_index = seg_index[i];
+            }
+        }
+    }
+
+    // Recursively build indices for all child segments
+    void BuildChildIndicesRecursively(std::vector<Segment>& segments) {
+        for (auto& segment : segments) {
+            if (segment.children && !segment.children->empty()) {
+                BuildSegmentIndexForLevel(
+                    *segment.children, segment.child_seg_index,
+                    segment.child_slope, segment.child_intercept);
+                BuildChildIndicesRecursively(*segment.children);
+            }
+        }
+    }
+
+    int SearchInSegmentIndex(const std::vector<Segment>& segments,
+                             const std::vector<int>& seg_index, double slope,
+                             double intercept, KeyType key) const {
+        if (segments.empty()) {
+            return -1;
+        }
+        // Handle boundary cases
+        if (key <= segments.front().start) {
+            return 0;
+        } else if (key >= segments.back().start) {
+            return static_cast<int>(segments.size() - 1);
+        }
+
+        // Calculate estimated position with bounds checking
+        int64_t position = static_cast<int64_t>(slope * key + intercept);
+        if (position < 0 || position >= seg_index.size()) {
+            // Fallback to binary search
+            return BinarySearchSegment(segments, key);
+        }
+
+        int estimated_index = seg_index[position];
+
+        // Bounds check for estimated_index
+        if (estimated_index < 0 || estimated_index >= segments.size()) {
+            return BinarySearchSegment(segments, key);
+        }
+
+        // Check immediate neighbors first (most common case)
+        if (IsKeyInSegmentRange(segments, estimated_index, key)) {
+            return estimated_index;
+        }
+        // Check adjacent segments
+        if (estimated_index > 0 &&
+            IsKeyInSegmentRange(segments, estimated_index - 1, key)) {
+            return estimated_index - 1;
+        }
+
+        if (estimated_index + 1 < segments.size() &&
+            IsKeyInSegmentRange(segments, estimated_index + 1, key)) {
+            return estimated_index + 1;
+        }
+
+        // If not found in immediate vicinity, use exponential search + binary
+        // search
+        return ExponentialBinarySearch(segments, estimated_index, key);
+    }
+
+    // Check if key falls within a segment's range
+    bool IsKeyInSegmentRange(const std::vector<Segment>& segments, int index,
+                             KeyType key) const {
+        if (index < 0 || index >= segments.size()) return false;
+
+        KeyType seg_start = segments[index].start;
+        KeyType seg_end = (index + 1 < segments.size())
+                              ? segments[index + 1].start - 1
+                              : segments[index].end;
+
+        return key >= seg_start && key <= seg_end;
+    }
+
+    // Expoential search followed by binary search
+    int ExponentialBinarySearch(const std::vector<Segment>& segments,
+                                int estimated_index, KeyType key) const {
+        int n = static_cast<int>(segments.size());
+
+        if (segments[estimated_index].start < key) {
+            // Search right
+            int low = estimated_index + 2;
+            int high = low;
+            int step = 1;
+
+            while (high < n && segments[high].start <= key) {
+                low = high;
+                step *= 2;
+                high = std::min(low + step, n - 1);
+            }
+            return BinarySearchInRange(segments, low, high, key);
+        } else {
+            // Search left
+            int high = estimated_index - 2;
+            int low = high;
+            int step = 1;
+
+            while (low > 0 && segments[low].start > key) {
+                high = low;
+                step *= 2;
+                low = std::max(high - step, 0);
+            }
+
+            return BinarySearchInRange(segments, low, high, key);
+        }
+        return -1;
+    }
+
+    // Binary search in a specific range
+    int BinarySearchInRange(const std::vector<Segment>& segments, int low,
+                            int high, KeyType key) const {
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (IsKeyInSegmentRange(segments, mid, key)) {
+                return mid;
+            }
+
+            if (segments[mid].start <= key) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return -1;
+    }
+
+    // Fallback binary search for entire segments array
+    int BinarySearchSegment(const std::vector<Segment>& segments,
+                            KeyType key) const {
+        int left = 0;
+        int right = static_cast<int>(segments.size()) - 1;
+
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            if (IsKeyInSegmentRange(segments, mid, key)) {
+                return mid;
+            }
+
+            if (segments[mid].start <= key) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        return -1;
+    }
+
+    // Root-level segment search
+    int SearchInRootSegmentIndex(KeyType key) const {
+        return SearchInSegmentIndex(root_segments_, root_seg_index_,
+                                    root_slope_, root_intercept_, key);
+    }
+
+    // Child-level segment search
+    int SearchInChildSegmentIndex(const Segment& parent_segment,
+                                  KeyType key) const {
+        if (!parent_segment.children || parent_segment.children->empty()) {
+            return -1;
+        }
+        return SearchInSegmentIndex(
+            *parent_segment.children, parent_segment.child_seg_index,
+            parent_segment.child_slope, parent_segment.child_intercept, key);
+    }
+
+    bool LookupInSegments(const std::vector<Segment>& segments, KeyType key,
+                          ValueType& value,
+                          const Segment* parent_segment = nullptr) const {
+        int seg_index = -1;
+
+        // Determine which search method to use
+        if (&segments == &root_segments_) {
+            // Root level - use root index
+            seg_index = SearchInRootSegmentIndex(key);
+        } else if (parent_segment != nullptr) {
+            // Child level with parent context - use parent's child index
+            seg_index = SearchInChildSegmentIndex(*parent_segment, key);
+        } else {
+            // Fallback to binary search (should not normally happen)
+            seg_index = BinarySearchSegment(segments, key);
+        }
+
+        if (seg_index == -1) {
+            return false;
+        }
+        const Segment& seg = segments[seg_index];
+        if (seg.children) {
+            // Pass this segment as parent context for the next level;
+            return LookupInSegments(*seg.children, key, value, &seg);
+        } else {
+            return LookupInSegmentData(seg, key, value);
+        }
+    }
+
     void SortAndDeduplicate(std::vector<std::pair<KeyType, ValueType>>& data) {
         // Sort by key
         std::sort(data.begin(), data.end(), [](const auto& a, const auto& b) {
@@ -206,6 +511,7 @@ class Hope {
             [](const auto& a, const auto& b) { return a.first == b.first; });
         data.erase(last, data.end());
     }
+
     std::vector<Segment> FindLinesAndCreateSegments(
         const std::vector<std::pair<KeyType, ValueType>>& data) {
         std::vector<Segment> segments;
@@ -247,7 +553,7 @@ class Hope {
                 }
 
                 // Calculate slope and intercept for the line
-                CalculateLineParameters(data, i, line_end, line_segment);
+                // CalculateLineParameters(data, i, line_end, line_segment);
 
                 // Store data keys
                 for (size_t j = i; j <= line_end; ++j) {
@@ -351,6 +657,9 @@ class Hope {
                 segment.intercept = spline_seg.intercept;
                 segment.num_keys_covered = spline_seg.num_keys_covered;
 
+                CalculateLineParameters(spline_seg.data, 0,
+                                        spline_seg.data.size() - 1, segment);
+
                 segments.push_back(std::move(segment));
             }
         }
@@ -384,7 +693,8 @@ class Hope {
         // Step 2: Group remaining segments and create representations
         std::vector<Segment> result_segments = std::move(top_segments);
         // We select a representation every 'segments_per_group' segments
-        size_t segments_per_group = segments.size() / current_node_capacity;
+        size_t segments_per_group =
+            std::ceil(segments.size() / current_node_capacity);
         if (segments_per_group < 1) {
             segments_per_group = 1;
         }
@@ -629,6 +939,13 @@ class Hope {
         // Replace old segments with new ones
         ReplaceSegmentRange(segments, start_idx, end_idx,
                             std::move(new_segments));
+
+        // Rebuild indices after retraining
+        if (&segments == &root_segments_) {
+            BuildSegmentIndexForLevel(root_segments_, root_seg_index_,
+                                      root_slope_, root_intercept_);
+        }
+        // TODO: Rebuild parent's child index if this is a child level
     }
 
     // Custom binary search for insertion position in segments array
@@ -673,6 +990,12 @@ class Hope {
         // Check if node capacity exceeded
         if (segments.size() > node_capacity_) {
             RebalanceNode(segments);
+        }
+
+        // Rebuild index if this is root level
+        if (&segments == &root_segments_) {
+            BuildSegmentIndexForLevel(root_segments_, root_seg_index_,
+                                      root_slope_, root_intercept_);
         }
 
         return true;
@@ -977,21 +1300,6 @@ class Hope {
         return begin;  // position of first element >= key
     }
 
-    bool LookupInSegments(const std::vector<Segment>& segments, KeyType key,
-                          ValueType& value) const {
-        auto segment_it = FindSegment(segments, key);
-        if (segment_it != segments.end()) {
-            if (segment_it->children) {
-                // This is a representation segment, search in children
-                return LookupInSegments(*segment_it->children, key, value);
-            } else {
-                // This is a leaf segment, search in data
-                return LookupInSegmentData(*segment_it, key, value);
-            }
-        }
-        return false;  // Key not found in any segment
-    }
-
     bool LookupInSegmentData(const Segment& segment, KeyType key,
                              ValueType& value) const {
         if (segment.is_line) {
@@ -1025,6 +1333,11 @@ class Hope {
             return false;
         }
 
+        if (segment.data.size() == 1 && segment.data[0].first == key) {
+            value = segment.data[0].second;
+            return true;
+        }
+
         // Use spline interpolation to estimate position
         double estimated_pos = EstimatePositionInSegment(segment, key);
 
@@ -1034,6 +1347,8 @@ class Hope {
                                              estimated_pos);
         } else {
             // Fallback to binary search
+            std::cout << "[LookupInSplineSegment] warning! key=" << key
+                      << std::endl;
             return SearchInSegment(segment, key, value);
         }
     }
@@ -1090,30 +1405,31 @@ class Hope {
         return -1.0;  // Invalid estimate
     }
 
-    void PrintSegments(const std::vector<Segment>& segments, int depth) const {
+    void PrintSegments(const std::vector<Segment>& segments, int depth,
+                       std::ostream& out) const {
         std::string indent(depth * 2, ' ');
 
         for (const auto& seg : segments) {
-            std::cout << indent;
+            out << indent;
 
             if (seg.is_line) {
-                std::cout << "Line [" << static_cast<int>(seg.start) << ", "
-                          << static_cast<int>(seg.end)
-                          << "], step: " << static_cast<int>(seg.step)
-                          << ", slope: " << std::fixed << std::setprecision(3)
-                          << seg.slope << ", intercept: " << std::fixed
-                          << std::setprecision(3) << seg.intercept
-                          << ", keys: " << seg.num_keys_covered
-                          << ", inserts: " << seg.insert_count << "\n";
+                out << "Line [" << static_cast<int>(seg.start) << ", "
+                    << static_cast<int>(seg.end)
+                    << "], step: " << static_cast<int>(seg.step)
+                    << ", slope: " << std::fixed << std::setprecision(3)
+                    << seg.slope << ", intercept: " << std::fixed
+                    << std::setprecision(3) << seg.intercept
+                    << ", keys: " << seg.num_keys_covered
+                    << ", inserts: " << seg.insert_count << "\n";
             } else {
-                std::cout << "Spline [" << static_cast<int>(seg.start) << ", "
-                          << static_cast<int>(seg.end)
-                          << "], keys: " << seg.num_keys_covered
-                          << ", inserts: " << seg.insert_count << "\n";
+                out << "Spline [" << static_cast<int>(seg.start) << ", "
+                    << static_cast<int>(seg.end)
+                    << "], keys: " << seg.num_keys_covered
+                    << ", inserts: " << seg.insert_count << "\n";
             }
 
             if (seg.children) {
-                PrintSegments(*seg.children, depth + 1);
+                PrintSegments(*seg.children, depth + 1, out);
             }
         }
     }
