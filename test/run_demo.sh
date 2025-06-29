@@ -21,18 +21,20 @@ fi
 
 # Run the benchmark
 ${PROGRAM} \
-  --keys_file=/mnt/shared_traces/libox/text_format/w029.csv \
+  --keys_file=/mnt/shared_traces/libox/text_format/w048.csv \
   --keys_file_type=text \
+  --sample_distribution=uniform \
   --config_file=/home/shuaihua/traces/libox/segments/segments_osm.csv \
-  --read=1 \
-  --insert=0 \
+  --read=0 \
+  --insert=1 \
   --operations_num=10000000 \
   --output_path=../result/out_demo.csv \
   --table_size=-1 \
-  --init_table_ratio=1 \
-  --node_capacity=13000 \
-  --top_k=0 \
+  --init_table_ratio=0.5 \
+  --node_capacity=3000 \
+  --top_k=0.05 \
   --max_error_rs=32 \
   --min_line_len=10 \
+  --use_radix \
   --thread_num=${THREAD_NUM} \
   --index=${INDEX_LIST}

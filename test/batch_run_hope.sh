@@ -15,14 +15,14 @@
 # Default configuration
 #TRACE_DIR="/home/shuaihua/traces/libox/alpha_beta"
 #SEGMENT_DIR="/home/shuaihua/traces/libox/alpha_beta/segments"
-TRACE_DIR="/home/shuaihua/traces/libox/text_format"
+TRACE_DIR="/mnt/shared_traces/cambridge/text_format"
 SEGMENT_DIR="/home/shuaihua/traces/libox/segments"
 # TRACE_DIR="/home/shuaihua/traces/libox/memory_test"
 # SEGMENT_DIR="/home/shuaihua/traces/libox/memory_test/segments"
-RESULT_DIR="../result/libox"
+RESULT_DIR="../result/hope"
 PROGRAM_BASE="../build"
 DATE_TAG=$(date +"%m%d")
-OUTPUT_FILE="$RESULT_DIR/out_libox_$DATE_TAG.csv"
+OUTPUT_FILE="$RESULT_DIR/out_hope_$DATE_TAG.csv"
 
 # Available configurations 
 #ALL_TRACES=(
@@ -105,7 +105,17 @@ OUTPUT_FILE="$RESULT_DIR/out_libox_$DATE_TAG.csv"
     # "longitudes_70_10.csv"
     # "longitudes_80_10.csv"
  #)
-ALL_TRACES=("osm.csv" "genome.csv" "fb.csv" "longitudes-200M.csv" "msr_web.csv" "w048.csv" )
+ALL_TRACES=()
+# Add w001.csv to w106.csv
+# for i in $(seq -w 1 106); do
+#     ALL_TRACES+=("w${i}.csv")
+# done
+# ALL_TRACES=("umass_financial1"  "umass_financial2"  "umass_websearch1"  "umass_websearch2"  "umass_websearch3")
+ALL_TRACES=("msr_proj.csv"  "msr_src1.csv"  "msr_src2.csv"  "msr_web.csv")
+
+# echo "${ALL_TRACES[@]}"  # Correct way to print all elements
+# exit
+
 # ALL_TRACES=(
 #     "fb_100.csv"  "fb_60.csv"       "genome_20.csv"  "genome_80.csv"            "longitudes-200M_40.csv"  "msr_web_100.csv"  "msr_web_60.csv"  "osm_20.csv"  "osm_80.csv"    "w048_20.csv"  "w048_80.csv"
 #     "fb_20.csv"   "fb_80.csv"       "genome_40.csv"  "longitudes-200M_100.csv"  "longitudes-200M_60.csv"  "msr_web_20.csv"   "msr_web_80.csv"  "osm_40.csv"  "w048_40.csv"
@@ -209,17 +219,17 @@ ALL_SEGMENTS=(
 ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80" "init20" "init40" "init60" "init80" "init100" "scanonly" "ycsbe" "scan10" "scan100" "scan1000" "scan10000" "scan100000" "scan500" "scan1500" "scan2000" "scan2500")
 ALL_THREAD_COUNTS=(1 8 16 24 32 40 48 56 64 72 80 84)
 DEFAULT_INDEX_LIST="alexol,lippol,btreeolc,artolc,libox,xindex"
-ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft")
+ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft" "pgm")
 
 # Define workload configurations
 declare -A WORKLOAD_PARAMS
-WORKLOAD_PARAMS[readonly]="--read=1.0 --insert=0.0 --init_table_ratio=1 --operations_num=200000000"
+WORKLOAD_PARAMS[readonly]="--read=1.0 --insert=0.0 --init_table_ratio=1 --operations_num=100000000"
 WORKLOAD_PARAMS[read20]="--read=0.2 --insert=0.8 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[read40]="--read=0.4 --insert=0.6 --init_table_ratio=0.5 --operations_num=200000000"
-WORKLOAD_PARAMS[balanced]="--read=0.5 --insert=0.5 --init_table_ratio=0.5 --operations_num=200000000"
+WORKLOAD_PARAMS[balanced]="--read=0.5 --insert=0.5 --init_table_ratio=0.5 --operations_num=100000000"
 WORKLOAD_PARAMS[read60]="--read=0.6 --insert=0.4 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[read80]="--read=0.8 --insert=0.2 --init_table_ratio=0.5 --operations_num=200000000"
-WORKLOAD_PARAMS[writeonly]="--read=0.0 --insert=1.0 --init_table_ratio=0.5 --operations_num=200000000"
+WORKLOAD_PARAMS[writeonly]="--read=0.0 --insert=1.0 --init_table_ratio=0.5 --operations_num=100000000"
 # workloads for memory consumption test (different bulkloading ratio)
 WORKLOAD_PARAMS[init20]="--read=0.0 --insert=1.0 --init_table_ratio=0.2 --operations_num=0"
 WORKLOAD_PARAMS[init40]="--read=0.0 --insert=1.0 --init_table_ratio=0.4 --operations_num=0"
@@ -305,6 +315,7 @@ done
 if [ ${#SELECTED_TRACES[@]} -eq 0 ]; then
     # Remove .csv extension from trace names
     for trace in "${ALL_TRACES[@]}"; do
+        # SELECTED_TRACES+=("${trace%}") # for umass
         SELECTED_TRACES+=("${trace%.csv}")
     done
 else
@@ -378,6 +389,7 @@ echo "========================="
 for trace_name in "${SELECTED_TRACES[@]}"; do
     # Add .csv extension for file lookups
     trace_file="$trace_name.csv"
+    # trace_file="$trace_name" # for umass
     segment_file="segments_$trace_name.csv"
     
     # Find the trace and segment files
@@ -390,10 +402,10 @@ for trace_name in "${SELECTED_TRACES[@]}"; do
         continue
     fi
     
-    if [[ ! -f "$SEGMENT_FILE" ]]; then
-        echo "Error: Segment file not found: $SEGMENT_FILE"
-        continue
-    fi
+    # if [[ ! -f "$SEGMENT_FILE" ]]; then
+    #     echo "Error: Segment file not found: $SEGMENT_FILE"
+    #     continue
+    # fi
     
     # Set binary path based on trace name
     if [[ "$trace_name" == "longitudes-200M" ]]; then

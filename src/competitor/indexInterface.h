@@ -10,6 +10,8 @@ struct Param { // for xindex
   // hope parameters
   size_t node_capacity=1000; // for hope
   double top_k=0.05;
+  bool use_radix=false;
+  size_t temp_node_cap=5;
   // lisa parameters
   size_t num_radix_bits=18;
   size_t max_error=32;

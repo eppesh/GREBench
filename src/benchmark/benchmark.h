@@ -56,7 +56,9 @@ class Benchmark {
     double latency_sample_ratio = 0.01;
     int error_bound;
     size_t node_capacity;
+    size_t temp_node_cap=5; // temp node capacity for retrain
     double top_k=0.05;
+    bool use_radix = false;
     size_t num_radix_bits;
     size_t max_error_rs;
     size_t min_line_len;
@@ -232,8 +234,10 @@ public:
         latency_sample = get_boolean_flag(flags, "latency_sample");
         latency_sample_ratio = stod(get_with_default(flags, "latency_sample_ratio", "0.01"));
         error_bound = stoi(get_with_default(flags, "error_bound", "64"));
-        node_capacity = stoul(get_with_default(flags, "node_capacity", "1000"));
+        node_capacity = stoul(get_with_default(flags, "node_capacity", "100"));
+        temp_node_cap = stoul(get_with_default(flags, "temp_node_cap", "5")); // for retrain
         top_k = stod(get_with_default(flags, "top_k", "0.05"));
+        use_radix = get_boolean_flag(flags, "use_radix");
         num_radix_bits = stoul(get_with_default(flags, "num_radix_bits", "18"));
         max_error_rs = stoul(get_with_default(flags, "max_error_rs", "32"));
         min_line_len = stoul(get_with_default(flags, "min_line_len", "10"));
