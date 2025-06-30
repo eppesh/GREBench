@@ -183,6 +183,7 @@ public:
         param.top_k = top_k;
         param.density_factor = density_factor;
         param.temp_node_cap = temp_node_cap;
+        param.use_radix = use_radix;
         param.num_radix_bits=num_radix_bits;
         param.max_error=max_error_rs;
         param.alpha=min_line_len;
@@ -373,6 +374,12 @@ public:
                     thread_param.success_read += ret;
                 } else if (op == INSERT) {  // insert
                     auto ret = index->put(key, key, &paramI);
+                    /* auto get_res = index->get(key, val, &paramI);
+                    if(!get_res) {
+                        printf("read not found after insert, Key %lu\n",key);
+                        exit(1);
+                        continue;
+                    } */
                     thread_param.success_insert += ret;
                 } else if (op == UPDATE) {  // update
                     auto ret = index->update(key, 234567891, &paramI);

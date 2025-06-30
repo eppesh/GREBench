@@ -138,18 +138,18 @@ class Hope {
     };
 
    private:
-   static constexpr size_t kRadixBits = 8;  // For radix table
-   static constexpr size_t kRadixSize = 1 << kRadixBits;
-   
-   std::vector<Segment> root_segments_;
-   size_t total_num_segments_;  // Number of segments in the whole index
-   // Parameters
-   size_t node_capacity_ = 100;
-   double top_k_percentage_;
-   size_t max_error_ = 32;
-   size_t min_line_length_ = 10;
-   size_t default_temp_node_capacity_ = 5;  // After retrain, 3->5
-   double density_factor_ = 2.0;
+    static constexpr size_t kRadixBits = 8;  // For radix table
+    static constexpr size_t kRadixSize = 1 << kRadixBits;
+
+    std::vector<Segment> root_segments_;
+    size_t total_num_segments_;  // Number of segments in the whole index
+    // Parameters
+    size_t node_capacity_ = 100;
+    double top_k_percentage_;
+    size_t max_error_ = 32;
+    size_t min_line_length_ = 10;
+    size_t default_temp_node_capacity_ = 5;  // After retrain, 3->5
+    double density_factor_ = 2.0;
 
     // Root-level indexing
     double root_slope_ = 0.0;
@@ -241,6 +241,9 @@ class Hope {
 
         // Insert and get the root segment that contains it
         int root_idx = -1;
+        /* if (key == 295848) {
+            std::cout << "debug here" << std::endl;
+        } */
         bool result =
             InsertPointSegment(root_segments_, point_seg, nullptr, root_idx);
 
@@ -274,6 +277,9 @@ class Hope {
 
     bool LookupInSegments(const std::vector<Segment>& segments, KeyType key,
                           ValueType& value) const {
+        /* if (key == 295848) {
+            std::cout << "debug here" << std::endl;
+        } */
         int seg_index = FindSegmentForLookup(segments, key);
         if (seg_index == -1) return false;
 
@@ -306,7 +312,7 @@ class Hope {
                              KeyType key) const {
         if (&segments == &root_segments_) {
             if (use_radix_table_ && !root_radix_table_.empty()) {
-                return SearchInRadixTable(key);
+                return SearchInRadixTable(key) - 1;
             } else if (!root_seg_index_.empty()) {
                 return SearchInRootSegmentIndex(key);
             }
@@ -335,10 +341,10 @@ class Hope {
         }
 
         // Fallback: use spline interpolation + binary search
-        std::cout << "[LookupInLineSegment] Warning! key=" << key
-                  << ", segment.start=" << segment.start
-                  << ", segment.end=" << segment.end << std::endl;
-        return LookupInSplineSegment(segment, key, value);
+        /*  std::cout << "[LookupInLineSegment] Warning! key=" << key
+                   << ", segment.start=" << segment.start
+                   << ", segment.end=" << segment.end << std::endl;
+         return LookupInSplineSegment(segment, key, value); */
     }
 
     bool LookupInSplineSegment(const Segment& segment, KeyType key,
@@ -347,9 +353,13 @@ class Hope {
             return false;
         }
         // For splines with only 1 key
-        if (segment.data.size() == 1 && segment.data[0].first == key) {
-            value = segment.data[0].second;
-            return true;
+        if (segment.data.size() == 1) {
+            if (segment.data[0].first == key) {
+                value = segment.data[0].second;
+                return true;
+            } else {
+                return false;
+            }
         }
 
         // Use spline interpolation to estimate position
@@ -374,7 +384,7 @@ class Hope {
 
         // Calculate search bounds
         size_t begin = (estimate < max_error_) ? 0 : (estimate - max_error_);
-        size_t end = std::min(estimate + max_error_ + 1, segment.data.size());
+        size_t end = std::min(estimate + max_error_ + 2, segment.data.size());
 
         // First check the estimated position
         if (estimate < segment.data.size() &&
@@ -461,7 +471,15 @@ class Hope {
             return true;
         } else {
             // Node is full, insert into previous segment
-            int target_idx = (insert_pos > 0) ? insert_pos - 1 : 0;
+            // int target_idx = (insert_pos > 0) ? insert_pos - 1 : 0;
+            int target_idx = 0;
+            if (insert_pos >= segments.size()) {
+                target_idx = insert_pos - 1;
+            } else if (key >= segments[insert_pos].end) {
+                target_idx = insert_pos;
+            } else {
+                target_idx = (insert_pos > 0) ? insert_pos - 1 : 0;
+            }
 
             if (&segments == &root_segments_) {
                 root_segment_idx = target_idx;
@@ -504,7 +522,7 @@ class Hope {
 
         // For root node, use index if available
         if (use_radix_table_ && !root_radix_table_.empty()) {
-            return SearchInRadixTable(key);
+            return SearchInRadixTable(key) - 1;
         } else if (!root_seg_index_.empty()) {
             return SearchInRootSegmentIndex(key);
         }
@@ -596,6 +614,7 @@ class Hope {
                               : segments[index].end;
 
         return key >= seg_start && key <= seg_end;
+        // return key >= segments[index].start && key <= segments[index].end;
     }
 
     // Expoential search followed by binary search
@@ -653,6 +672,13 @@ class Hope {
     // Fallback binary search for entire segments array
     int BinarySearchSegment(const std::vector<Segment>& segments,
                             KeyType key) const {
+        if (key <= segments.front().start) {
+            return 0;
+        }
+        if (key >= segments.back().end) {
+            return segments.size() - 1;
+        }
+
         int left = 0;
         int right = static_cast<int>(segments.size()) - 1;
 
