@@ -58,6 +58,7 @@ class Benchmark {
     size_t node_capacity;
     size_t temp_node_cap=5; // temp node capacity for retrain
     double top_k=0.05;
+    double density_factor=3;
     bool use_radix = false;
     size_t num_radix_bits;
     size_t max_error_rs;
@@ -180,6 +181,8 @@ public:
         // initilize Index (sort keys first)
         Param param = Param(thread_num, 0, node_capacity, config_file);
         param.top_k = top_k;
+        param.density_factor = density_factor;
+        param.temp_node_cap = temp_node_cap;
         param.num_radix_bits=num_radix_bits;
         param.max_error=max_error_rs;
         param.alpha=min_line_len;
@@ -237,6 +240,7 @@ public:
         node_capacity = stoul(get_with_default(flags, "node_capacity", "100"));
         temp_node_cap = stoul(get_with_default(flags, "temp_node_cap", "5")); // for retrain
         top_k = stod(get_with_default(flags, "top_k", "0.05"));
+        density_factor = stod(get_with_default(flags, "density_factor", "3"));
         use_radix = get_boolean_flag(flags, "use_radix");
         num_radix_bits = stoul(get_with_default(flags, "num_radix_bits", "18"));
         max_error_rs = stoul(get_with_default(flags, "max_error_rs", "32"));

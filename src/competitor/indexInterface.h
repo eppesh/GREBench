@@ -10,6 +10,7 @@ struct Param { // for xindex
   // hope parameters
   size_t node_capacity=1000; // for hope
   double top_k=0.05;
+  double density_factor=3;
   bool use_radix=false;
   size_t temp_node_cap=5;
   // lisa parameters

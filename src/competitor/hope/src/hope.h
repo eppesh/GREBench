@@ -11,7 +11,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "greedy_spline_corridor.h"
+// #include "greedy_spline_corridor.h"
+#include "hope_util.h"
 
 namespace hopens {
 
@@ -23,7 +24,7 @@ class Hope {
         KeyType end;
         double slope = 0.0;  // Used for quickly locating key in data
         double intercept = 0.0;
-        size_t offset=0; // Used for concecutive spline segments
+        size_t offset = 0;  // Used for concecutive spline segments
         std::unique_ptr<std::vector<Segment>> children;
 
         bool is_line;
@@ -32,9 +33,6 @@ class Hope {
         // Number of original keys this segment covers
         size_t num_keys_covered = 0;
         size_t segment_count = 1;  // total segments including children
-        // Density tracking for retraining
-        // Number of insertions in this segment since last retrain
-        size_t insert_count = 0;
         std::vector<std::pair<KeyType, ValueType>> data;
 
         // Hierarchical indexing for children
@@ -62,7 +60,6 @@ class Hope {
               children(std::move(other.children)),
               num_keys_covered(other.num_keys_covered),
               segment_count(other.segment_count),
-              insert_count(other.insert_count),
               child_seg_index(std::move(other.child_seg_index)),
               child_slope(other.child_slope),
               child_intercept(other.child_intercept) {}
@@ -82,7 +79,6 @@ class Hope {
                 children = std::move(other.children);
                 num_keys_covered = other.num_keys_covered;
                 segment_count = other.segment_count;
-                insert_count = other.insert_count;
                 child_seg_index = std::move(other.child_seg_index);
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
@@ -103,7 +99,6 @@ class Hope {
               offset(other.offset),
               num_keys_covered(other.num_keys_covered),
               segment_count(other.segment_count),
-              insert_count(other.insert_count),
               child_seg_index(other.child_seg_index),
               child_slope(other.child_slope),
               child_intercept(other.child_intercept) {
@@ -127,7 +122,6 @@ class Hope {
                 offset = other.offset;
                 num_keys_covered = other.num_keys_covered;
                 segment_count = other.segment_count;
-                insert_count = other.insert_count;
                 child_seg_index = other.child_seg_index;
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
@@ -144,18 +138,18 @@ class Hope {
     };
 
    private:
-    static constexpr double kDensityFactorHigh = 2.0;
-    static constexpr size_t kRadixBits = 8;  // For radix table
-    static constexpr size_t kRadixSize = 1 << kRadixBits;
-
-    std::vector<Segment> root_segments_;
-    size_t total_num_segments_;  // Number of segments in the whole index
-    // Parameters
-    size_t node_capacity_ = 100;
-    double top_k_percentage_;
-    size_t max_error_ = 32;
-    size_t min_line_length_ = 10;
-    size_t default_temp_node_capacity_ = 5;  // After retrain, 3->5
+   static constexpr size_t kRadixBits = 8;  // For radix table
+   static constexpr size_t kRadixSize = 1 << kRadixBits;
+   
+   std::vector<Segment> root_segments_;
+   size_t total_num_segments_;  // Number of segments in the whole index
+   // Parameters
+   size_t node_capacity_ = 100;
+   double top_k_percentage_;
+   size_t max_error_ = 32;
+   size_t min_line_length_ = 10;
+   size_t default_temp_node_capacity_ = 5;  // After retrain, 3->5
+   double density_factor_ = 2.0;
 
     // Root-level indexing
     double root_slope_ = 0.0;
@@ -493,8 +487,6 @@ class Hope {
         }
 
         // Insert as child
-        segment.insert_count++;
-
         if (!segment.children) {
             segment.children = std::make_unique<std::vector<Segment>>();
         }
@@ -1154,7 +1146,7 @@ class Hope {
         double density = static_cast<double>(segment.segment_count) *
                          node_capacity_ / total_num_segments_;
 
-        if (density > kDensityFactorHigh) {
+        if (density > density_factor_) {
             RetrainWithNeighbors(root_idx);
         }
     }
@@ -1174,6 +1166,8 @@ class Hope {
         size_t temp_node_capacity =
             default_temp_node_capacity_;  // 3->5 by default
 
+        SortAndDeduplicate(retrain_data);
+
         // Retrain
         std::vector<Segment> new_segments =
             FindLinesAndCreateSegments(retrain_data);
@@ -1184,7 +1178,6 @@ class Hope {
 
         // Update segment counts and reset insert counts
         for (auto& seg : new_segments) {
-            seg.insert_count = 0;
             UpdateSegmentCount(seg);
         }
 
@@ -1249,6 +1242,8 @@ class Hope {
                 root_segments_[best_start + required_segments - 1].end;
             repr_seg.is_representation = true;
             repr_seg.num_keys_covered = compress_data.size();
+
+            SortAndDeduplicate(compress_data);
 
             // Build children
             std::vector<Segment> child_segments =
@@ -1434,10 +1429,8 @@ class Hope {
 
             out << ", keys: " << seg.num_keys_covered
                 << ", segments: " << seg.segment_count
-                << ", slope: " << seg.slope
-                << ", intercept: " << seg.intercept
-                << ", offset: " << seg.offset
-                << ", inserts: " << seg.insert_count;
+                << ", slope: " << seg.slope << ", intercept: " << seg.intercept
+                << ", offset: " << seg.offset;
 
             if (seg.children) {
                 out << ", children: " << seg.children->size();
