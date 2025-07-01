@@ -21,6 +21,7 @@
 // #include "./loft/loft.h"
 #include "./hope/hopeapi.h"
 #include "./lisa/lisaapi.h"
+#include "./rs/rsapi.h"
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>
 indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
@@ -79,6 +80,8 @@ indexInterface<KEY_TYPE, PAYLOAD_TYPE> *get_index(std::string index_type) {
         index = new HopeInterface<KEY_TYPE, PAYLOAD_TYPE>;
     } else if (index_type == "lisa") {
         index = new LisaInterface<KEY_TYPE, PAYLOAD_TYPE>;
+    } else if (index_type == "rs") {
+        index = new RSInterface<KEY_TYPE, PAYLOAD_TYPE>;
     } else {
         std::cout << "Could not find a matching index called " << index_type
                   << ".\n";

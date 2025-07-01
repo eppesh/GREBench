@@ -277,9 +277,6 @@ class Hope {
 
     bool LookupInSegments(const std::vector<Segment>& segments, KeyType key,
                           ValueType& value) const {
-        /* if (key == 295848) {
-            std::cout << "debug here" << std::endl;
-        } */
         int seg_index = FindSegmentForLookup(segments, key);
         if (seg_index == -1) return false;
 
@@ -312,7 +309,7 @@ class Hope {
                              KeyType key) const {
         if (&segments == &root_segments_) {
             if (use_radix_table_ && !root_radix_table_.empty()) {
-                return SearchInRadixTable(key) - 1;
+                return SearchInRadixTable(key);
             } else if (!root_seg_index_.empty()) {
                 return SearchInRootSegmentIndex(key);
             }
@@ -522,7 +519,7 @@ class Hope {
 
         // For root node, use index if available
         if (use_radix_table_ && !root_radix_table_.empty()) {
-            return SearchInRadixTable(key) - 1;
+            return SearchInRadixTable(key);
         } else if (!root_seg_index_.empty()) {
             return SearchInRootSegmentIndex(key);
         }
@@ -1045,18 +1042,19 @@ class Hope {
     void BuildRadixTable() {
         if (root_segments_.empty()) return;
         size_t num_shift_bits = 18;
-        uint32_t max_prefix = (max_key_ - min_key_) >> num_shift_bits;
+        const uint32_t max_prefix = (max_key_ - min_key_) >> num_shift_bits;
         root_radix_table_.resize(max_prefix + 2, 0);
         size_t prev_prefix = 0;
 
         for (size_t i = 0; i < root_segments_.size(); ++i) {
             KeyType key = root_segments_[i].start;
-            KeyType curr_prefix = (key - min_key_) >> num_shift_bits;
+            const KeyType curr_prefix = (key - min_key_) >> num_shift_bits;
 
             if (curr_prefix != prev_prefix) {
+                const uint32_t curr_index = i;
                 for (KeyType prefix = prev_prefix + 1; prefix <= curr_prefix;
                      ++prefix) {
-                    root_radix_table_[prefix] = i;
+                    root_radix_table_[prefix] = curr_index;
                 }
                 prev_prefix = curr_prefix;
             }
@@ -1064,29 +1062,37 @@ class Hope {
 
         // Finalize radix table
         ++prev_prefix;
+        const uint32_t num_root_segment = root_segments_.size();
         for (; prev_prefix < root_radix_table_.size(); ++prev_prefix) {
-            root_radix_table_[prev_prefix] = root_segments_.size();
+            root_radix_table_[prev_prefix] = num_root_segment;
         }
     }
 
-    int SearchInRadixTable(KeyType key) const {
+    int SearchInRadixTable(const KeyType key) const {
         if (key < min_key_) return 0;
         if (key > max_key_) return root_segments_.size() - 1;
 
-        KeyType prefix = (key - min_key_) >> 18;
+        const KeyType prefix = (key - min_key_) >> 18;
         assert(prefix + 1 < root_radix_table_.size());
-        uint32_t begin = root_radix_table_[prefix];
-        uint32_t end = root_radix_table_[prefix + 1];
+        const uint32_t begin = root_radix_table_[prefix];
+        const uint32_t end = root_radix_table_[prefix + 1];
         if (end - begin < 32) {
             // Do linear search over narrowed range.
             uint32_t current = begin;
-            while (root_segments_[current].start < key) ++current;
-            return current;
+            while (current < end && root_segments_[current].start <= key) {
+                ++current;
+            }
+            return current - 1;
         }
 
         // Do binary search over narrowed range.
-        int pos = BinarySearchInRange(root_segments_, begin, end, key);
-        return pos;
+        /* int pos = BinarySearchInRange(root_segments_, begin, end, key);
+        return pos; */
+        auto lb = std::upper_bound(
+            root_segments_.begin() + begin, root_segments_.begin() + end, key,
+            [](const KeyType& k, const Segment& seg) { return k < seg.start; });
+
+        return std::distance(root_segments_.begin(), lb) - 1;
     }
 
     void RebuildRootIndex() {
