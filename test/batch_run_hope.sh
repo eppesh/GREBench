@@ -15,7 +15,7 @@
 # Default configuration
 #TRACE_DIR="/home/shuaihua/traces/libox/alpha_beta"
 #SEGMENT_DIR="/home/shuaihua/traces/libox/alpha_beta/segments"
-TRACE_DIR="/mnt/shared_traces/cambridge/text_format"
+TRACE_DIR="/mnt/shared_traces/hope"
 SEGMENT_DIR="/home/shuaihua/traces/libox/segments"
 # TRACE_DIR="/home/shuaihua/traces/libox/memory_test"
 # SEGMENT_DIR="/home/shuaihua/traces/libox/memory_test/segments"
@@ -111,7 +111,8 @@ ALL_TRACES=()
 #     ALL_TRACES+=("w${i}.csv")
 # done
 # ALL_TRACES=("umass_financial1"  "umass_financial2"  "umass_websearch1"  "umass_websearch2"  "umass_websearch3")
-ALL_TRACES=("msr_proj.csv"  "msr_src1.csv"  "msr_src2.csv"  "msr_web.csv")
+#ALL_TRACES=("msr_proj.csv"  "msr_src1.csv"  "msr_src2.csv"  "msr_web.csv")
+ALL_TRACES=("msr_proj.csv" "msr_src1.csv" "msr_src2.csv" "msr_web.csv" "umass_financial1.csv" "w025.csv" "w046.csv" "w048.csv" "w054.csv" "w056.csv" "w057.csv" "w087.csv")
 
 # echo "${ALL_TRACES[@]}"  # Correct way to print all elements
 # exit
@@ -219,7 +220,7 @@ ALL_SEGMENTS=(
 ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80" "init20" "init40" "init60" "init80" "init100" "scanonly" "ycsbe" "scan10" "scan100" "scan1000" "scan10000" "scan100000" "scan500" "scan1500" "scan2000" "scan2500")
 ALL_THREAD_COUNTS=(1 8 16 24 32 40 48 56 64 72 80 84)
 DEFAULT_INDEX_LIST="alexol,lippol,btreeolc,artolc,libox,xindex"
-ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft" "pgm")
+ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft" "pgm" "rs" "hope" "lisa")
 
 # Define workload configurations
 declare -A WORKLOAD_PARAMS
@@ -448,6 +449,12 @@ for trace_name in "${SELECTED_TRACES[@]}"; do
                 ${WORKLOAD_PARAMS[$workload_name]} \
                 --output_path="$OUTPUT_FILE" \
                 --table_size=-1 \
+                --node_capacity=100000 \
+                --top_k=0.05 \
+                --density_factor=4 \
+                --temp_node_cap=20 \
+                --max_error_rs=32 \
+                --min_line_len=10 \
                 --thread_num="$thread_num" \
                 --index="$INDEX_LIST"
                 
