@@ -320,7 +320,9 @@ std::vector<SplineSegment<KeyType, ValueType>> CreateSplineSegments(
             segment.num_keys_covered = segment.data.size();
 
             segment.offset = cumulative_offset;
-            cumulative_offset += (segment.data.size() - 1); // -1: two consecutive segments have repeated boundaries
+            cumulative_offset +=
+                (segment.data.size() -
+                 1);  // -1: two consecutive segments have repeated boundaries
 
             if (segment.data.size() >= 2) {
                 double start_pos = spline_points[i].y;

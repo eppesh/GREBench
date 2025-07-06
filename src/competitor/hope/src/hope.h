@@ -9,6 +9,7 @@
 #include <memory>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // #include "greedy_spline_corridor.h"
@@ -41,10 +42,19 @@ class Hope {
         double child_slope = 0.0;
         double child_intercept = 0.0;
 
-        Segment() : start(0), end(0), is_line(false), step(0) {}
+        bool is_empty = false;   
+        KeyType allocated_start;
+        KeyType allocated_end;
 
-        Segment(KeyType s, KeyType e, bool line = false)
-            : start(s), end(e), is_line(line), step(0) {}
+        Segment() : start(0), end(0), is_line(false), step(0), is_empty(false) {}
+
+        Segment(KeyType s, KeyType e, bool line = false, bool empty = false) 
+            : start(s), end(e), is_line(line), step(0), is_empty(empty) {
+            if (empty) {
+                allocated_start = s;
+                allocated_end = e;
+            }
+        }
 
         // Move constructor
         Segment(Segment&& other) noexcept
@@ -62,7 +72,10 @@ class Hope {
               segment_count(other.segment_count),
               child_seg_index(std::move(other.child_seg_index)),
               child_slope(other.child_slope),
-              child_intercept(other.child_intercept) {}
+              child_intercept(other.child_intercept),
+              is_empty(other.is_empty),    
+              allocated_start(other.allocated_start),
+              allocated_end(other.allocated_end) {}
 
         // Move assignment operator
         Segment& operator=(Segment&& other) noexcept {
@@ -82,6 +95,9 @@ class Hope {
                 child_seg_index = std::move(other.child_seg_index);
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
+                is_empty = other.is_empty;                   
+                allocated_start = other.allocated_start;    
+                allocated_end = other.allocated_end;
             }
             return *this;
         }
@@ -101,7 +117,10 @@ class Hope {
               segment_count(other.segment_count),
               child_seg_index(other.child_seg_index),
               child_slope(other.child_slope),
-              child_intercept(other.child_intercept) {
+              child_intercept(other.child_intercept),
+              is_empty(other.is_empty),     
+              allocated_start(other.allocated_start),   
+              allocated_end(other.allocated_end) { 
             if (other.children) {
                 children =
                     std::make_unique<std::vector<Segment>>(*other.children);
@@ -125,6 +144,9 @@ class Hope {
                 child_seg_index = other.child_seg_index;
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
+                is_empty = other.is_empty;            
+                allocated_start = other.allocated_start; 
+                allocated_end = other.allocated_end; 
 
                 if (other.children) {
                     children =
@@ -164,6 +186,8 @@ class Hope {
     KeyType max_key_;
     bool key_range_initialized_ = false;
 
+    bool allow_capacity_overflow_ = true;
+
    public:
     // ====================================================================
     // PUBLIC API METHODS
@@ -189,7 +213,7 @@ class Hope {
         default_temp_node_capacity_ = temp_node_capacity;
     }
     // Bulk loading
-    void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num) {
+    void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num, std::string filename) {
         if (num == 0 || key_value == nullptr) return;
 
         // Create vector from array without copying - just wrap the data
@@ -211,7 +235,7 @@ class Hope {
 
         // Step 2: Build tree structure
         total_num_segments_ = segments.size();
-        root_segments_ = BuildTreeLevel(std::move(segments), node_capacity_);
+        root_segments_ = BuildTreeLevel(std::move(segments), node_capacity_, true);
 
         // Update segment counts
         UpdateSegmentCounts(root_segments_);
@@ -224,34 +248,148 @@ class Hope {
                   << ", max_key=" << max_key_
                   << "; total segments after bulk load:" << total_num_segments_
                   << "; root segments:" << root_segments_.size() << std::endl;
-        PrintTree();
+        // PrintEmptySegmentStats();
+        // PrintTree();
+        // TestRoot(filename, root_segments_, num);
+        // SaveKeysToFiles(data, filename);
+    }
+
+    
+
+    bool InsertInSegments(std::vector<Segment>& segments, KeyType key, 
+                     const ValueType& value, Segment* parent_segment, 
+                     int& root_segment_idx) {
+        
+        if (segments.empty()) {
+            Segment point_seg;
+            point_seg.start = key;
+            point_seg.end = key;
+            point_seg.is_line = false;
+            point_seg.is_representation = false;
+            point_seg.data.emplace_back(key, value);
+            point_seg.num_keys_covered = 1;
+            point_seg.segment_count = 1;
+            segments.push_back(point_seg);
+            total_num_segments_++;
+            if (parent_segment) {
+                parent_segment->segment_count++;
+            }
+            // Rebuild index if this is root level
+            if (&segments == &root_segments_) {
+                root_segment_idx = 0;
+                RebuildRootIndex();
+            }
+            return true;
+        }
+
+        int seg_index = FindSegmentForLookup(segments, key);
+        
+        Segment& target_seg = segments[seg_index];
+        
+        if (&segments == &root_segments_) {
+            root_segment_idx = seg_index;
+        }
+
+        if (target_seg.is_empty) {
+            if (key >= target_seg.allocated_start && key <= target_seg.allocated_end) {
+                return ActivateAndUpdateEmptySegment(target_seg, key, value);
+            }
+        }
+        
+        if (target_seg.is_representation) {
+            if (!target_seg.children) {
+                target_seg.children = std::make_unique<std::vector<Segment>>();
+            }
+            root_segment_idx = -1;
+            return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+        }
+        
+        if (key >= target_seg.start && key <= target_seg.end) {
+            if (target_seg.num_keys_covered < max_error_ && !target_seg.is_line) {
+                auto insert_pos = std::lower_bound(target_seg.data.begin(), target_seg.data.end(), key,
+                                    [](const auto& pair, KeyType k) {
+                                        return pair.first < k;
+                                    });
+                target_seg.data.insert(insert_pos, std::make_pair(key, value));
+                target_seg.num_keys_covered++;
+                return true;
+            }
+            if (!target_seg.children) {
+                target_seg.children = std::make_unique<std::vector<Segment>>();
+            }
+            root_segment_idx = -1;
+            return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+        } else {
+            if (target_seg.data.size() < max_error_ && !target_seg.is_line) {
+                auto insert_pos = std::lower_bound(target_seg.data.begin(), target_seg.data.end(), key,
+                                                [](const auto& pair, KeyType k) {
+                                                    return pair.first < k;
+                                                });
+                
+                target_seg.data.insert(insert_pos, std::make_pair(key, value));
+                target_seg.num_keys_covered++;
+                
+                if (key < target_seg.start) target_seg.start = key;
+                if (key > target_seg.end) target_seg.end = key;
+                
+                return true;
+            } else {
+                if (segments.size() < max_error_) {
+                    Segment new_segment;
+                    new_segment.start = key;
+                    new_segment.end = key;
+                    new_segment.is_line = false;
+                    new_segment.data.emplace_back(key, value);
+                    new_segment.num_keys_covered = 1;
+                    new_segment.segment_count = 1;
+                    
+                    int current_seg_index = seg_index;
+                    int insert_pos;
+                    
+                    if (key < target_seg.start) {
+                        insert_pos = current_seg_index;
+                    } else {
+                        insert_pos = current_seg_index + 1;
+                    }
+                    
+                    segments.insert(segments.begin() + insert_pos, std::move(new_segment));
+                    
+                    total_num_segments_++;
+                    if (parent_segment) {
+                        parent_segment->segment_count++;
+                    }
+                    
+                    if (&segments == &root_segments_) {
+                        RebuildRootIndex();
+                        if (key < target_seg.start) {
+                            root_segment_idx = insert_pos;
+                        } else {
+                            root_segment_idx = current_seg_index;
+                        }
+                    }
+                    
+                    return true;
+                } else {
+                    if (!target_seg.children) {
+                        target_seg.children = std::make_unique<std::vector<Segment>>();
+                    }
+                    root_segment_idx = -1;
+                    return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+                }
+            }
+        }
     }
 
     // Insert a single key-value pair
     bool Insert(KeyType key, const ValueType& value) {
-        // Create point segment
-        Segment point_seg;
-        point_seg.start = key;
-        point_seg.end = key;
-        point_seg.is_line = false;
-        point_seg.is_representation = false;
-        point_seg.data.emplace_back(key, value);
-        point_seg.num_keys_covered = 1;
-        point_seg.segment_count = 1;
-
-        // Insert and get the root segment that contains it
         int root_idx = -1;
-        /* if (key == 295848) {
-            std::cout << "debug here" << std::endl;
-        } */
-        bool result =
-            InsertPointSegment(root_segments_, point_seg, nullptr, root_idx);
-
+        bool result = InsertInSegments(root_segments_, key, value, nullptr, root_idx);
+        
         if (result && root_idx != -1) {
             // Check if retrain is needed
             CheckAndRetrain(root_idx);
         }
-
+        
         return result;
     }
 
@@ -274,6 +412,85 @@ class Hope {
     // ====================================================================
     // LOOKUP METHODS
     // ====================================================================
+
+    void PreallocateEmptySegmentsInLevel(std::vector<Segment>& segments, 
+                                        size_t level_capacity, bool is_root_level = false) {
+        
+        if (!IsLeafLevel(segments)) {
+            return;
+        }
+
+        if (segments.size() < 2) return;
+
+        for (int i = segments.size() - 2; i >= 0; --i) {
+            if (IsLeafSegment(segments[i]) && IsLeafSegment(segments[i + 1])) {
+                KeyType gap_start = segments[i].end + 1;
+                KeyType gap_end = segments[i + 1].start - 1;
+                
+                if (gap_end >= gap_start) {
+                    Segment empty_seg(gap_start, gap_end, false, true);
+                    empty_seg.segment_count = 1;
+                    empty_seg.num_keys_covered = 0;
+                    
+                    segments.insert(segments.begin() + i + 1, std::move(empty_seg));
+                    total_num_segments_++;
+                }
+            }
+        }
+    }
+
+    bool IsLeafLevel(const std::vector<Segment>& segments) {
+        for (const auto& seg : segments) {
+            if (seg.is_representation) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool IsLeafSegment(const Segment& segment) {
+        return !segment.is_representation && !segment.is_empty;
+    }
+
+    bool ActivateAndUpdateEmptySegment(Segment& empty_seg, KeyType key, const ValueType& value) {
+        empty_seg.is_empty = false;
+        empty_seg.start = key;
+        empty_seg.end = key;
+        empty_seg.data.clear();
+        empty_seg.data.emplace_back(key, value);
+        empty_seg.num_keys_covered = 1;
+        empty_seg.is_line = false;
+        return true;
+    }
+
+    bool UpdateExistingSegment(Segment& segment, KeyType key, const ValueType& value, int segment_idx) {
+        segment.data.emplace_back(key, value);
+        segment.num_keys_covered++;
+        
+        if (key < segment.start) segment.start = key;
+        if (key > segment.end) segment.end = key;
+        
+        CheckAndRetrainRelaxed(segment_idx);
+        
+        return true;
+    }
+
+    void CheckAndRetrainRelaxed(int root_idx) {
+        if (root_idx < 0 || root_idx >= root_segments_.size()) return;
+
+        const Segment& segment = root_segments_[root_idx];
+        
+        double density = static_cast<double>(segment.segment_count) * 
+                        node_capacity_ / total_num_segments_;
+
+        double relaxed_threshold = density_factor_ * 3.0;
+        
+        if (density > relaxed_threshold) {
+            std::cout << "[CheckAndRetrainRelaxed] Triggering retrain for segment " 
+                      << root_idx << ", density=" << density << std::endl;
+            RetrainWithNeighbors(root_idx);
+        }
+    }
 
     bool LookupInSegments(const std::vector<Segment>& segments, KeyType key,
                           ValueType& value) const {
@@ -368,8 +585,8 @@ class Hope {
                                              estimated_pos);
         } else {
             // Fallback to binary search
-            std::cout << "[LookupInSplineSegment] warning! key=" << key
-                      << std::endl;
+            /* std::cout << "[LookupInSplineSegment] warning! key=" << key
+                      << std::endl; */
             return SearchInSegment(segment, key, value);
         }
     }
@@ -859,8 +1076,10 @@ class Hope {
     }
 
     std::vector<Segment> BuildTreeLevel(std::vector<Segment> segments,
-                                        size_t current_node_capacity) {
-        if (segments.size() <= current_node_capacity) {
+                                        size_t current_node_capacity, bool is_root_level = false) {
+        PreallocateEmptySegmentsInLevel(segments, current_node_capacity, is_root_level);
+
+        if (segments.size() <= current_node_capacity * 2) {
             return segments;
         }
 
@@ -893,7 +1112,9 @@ class Hope {
         }
 
         CreateGroupRepresentations(segments, is_top_segment, segments_per_group,
-                                   current_node_capacity, result_segments);
+                                   current_node_capacity, result_segments, is_root_level);
+
+        PreallocateEmptySegmentsInLevel(result_segments, current_node_capacity, is_root_level);
 
         return result_segments;
     }
@@ -937,7 +1158,8 @@ class Hope {
                                     const std::vector<bool>& is_top_segment,
                                     size_t segments_per_group,
                                     size_t current_node_capacity,
-                                    std::vector<Segment>& result_segments) {
+                                    std::vector<Segment>& result_segments,
+                                    bool is_root_level = false) {
         if (segments.empty()) return;
 
         // Create groups while respecting top-k segment boundaries
@@ -968,10 +1190,9 @@ class Hope {
             }
 
             // Recursively build child level if needed
-            if (child_segments.size() > current_node_capacity) {
-                child_segments = BuildTreeLevel(std::move(child_segments),
-                                                current_node_capacity);
-            }
+            child_segments = BuildTreeLevel(std::move(child_segments),
+                                        current_node_capacity, false);
+
 
             repr_segment.children = std::make_unique<std::vector<Segment>>(
                 std::move(child_segments));
@@ -1203,6 +1424,12 @@ class Hope {
         // Retrain
         std::vector<Segment> new_segments =
             FindLinesAndCreateSegments(retrain_data);
+
+        PreallocateEmptySegmentsInLevel(new_segments, temp_node_capacity, false);
+        if (new_segments.size() > temp_node_capacity * 3) {
+            new_segments = BuildTreeLevel(std::move(new_segments), temp_node_capacity, false);
+        }
+
         if (new_segments.size() > temp_node_capacity) {
             new_segments =
                 BuildTreeLevel(std::move(new_segments), temp_node_capacity);
@@ -1280,6 +1507,8 @@ class Hope {
             // Build children
             std::vector<Segment> child_segments =
                 FindLinesAndCreateSegments(compress_data);
+            PreallocateEmptySegmentsInLevel(child_segments, node_capacity_, false);
+
             repr_seg.children = std::make_unique<std::vector<Segment>>(
                 std::move(child_segments));
             UpdateSegmentCount(repr_seg);
@@ -1444,7 +1673,9 @@ class Hope {
         for (const auto& seg : segments) {
             out << indent;
 
-            if (seg.is_representation) {
+            if (seg.is_empty) {
+                out << "Empty ";
+            } else if (seg.is_representation) {
                 out << "Repr ";
             } else if (seg.is_line) {
                 out << "Line ";
@@ -1473,6 +1704,324 @@ class Hope {
             if (seg.children) {
                 PrintSegments(*seg.children, depth + 1, out);
             }
+        }
+    }
+
+    // num of keys in root line
+    void TestRoot(const std::string& input_filename,
+                  const std::vector<Segment>& segments, size_t total_num_keys) {
+        size_t num_keys_in_root = 0;
+        size_t num_keys_in_root_line = 0;
+        std::cout << "Total num of seg: " << segments.size() << std::endl;
+        size_t num_repr = 0;
+        size_t num_line = 0;
+        size_t num_spline = 0;
+        for (size_t i = 0; i < segments.size(); ++i) {
+            if (!segments[i].is_representation) {
+                if (segments[i].is_line) {
+                    num_line++;
+                    std::cout << "line: start=" << segments[i].start
+                              << "; end=" << segments[i].end
+                              << "; num keys=" << segments[i].data.size()
+                              << std::endl;
+                    num_keys_in_root += segments[i].data.size();
+                    num_keys_in_root_line += segments[i].data.size();
+                } else {
+                    num_spline++;
+                    num_keys_in_root += segments[i].data.size();
+                }
+            } else {
+                num_repr++;
+            }
+        }
+        std::cout << "num_repr=" << num_repr << "; num_line=" << num_line
+                  << "; num_spline=" << num_spline << std::endl;
+        double num_keys_in_root_prct =
+            (double(num_keys_in_root) * 100 / total_num_keys);
+        double num_keys_in_root_line_prct =
+            (double(num_keys_in_root_line) * 100 / total_num_keys);
+        std::cout << "[TestRoot] Num keys in root: " << num_keys_in_root
+                  << "; pert: " << num_keys_in_root_prct << "%" << std::endl;
+        std::cout << "[TestRoot] Num keys in root line: "
+                  << num_keys_in_root_line
+                  << "; pert: " << num_keys_in_root_line_prct << "%"
+                  << std::endl;
+        std::string output_filename = "numkey_in_root_info_fiuweb_0705.csv";
+        std::ofstream ofs(output_filename, std::ios::app);
+        bool file_has_content = file_exists_and_not_empty(output_filename);
+        if (!ofs.is_open()) {
+            std::cerr << "Failed to open file: " << output_filename
+                      << std::endl;
+            return;
+        }
+
+        // Header
+        if (!file_has_content) {
+            ofs << "filename,min_line_len,top_k,num_keys_in_root,num_keys_in_"
+                   "root_prct,num_keys_"
+                   "in_root_line,num_keys_in_root_line_prct\n";
+        }
+        ofs << input_filename << "," << min_line_length_ << ","
+            << top_k_percentage_ << "," << num_keys_in_root << ","
+            << num_keys_in_root_prct << "," << num_keys_in_root_line << ","
+            << num_keys_in_root_line_prct << "\n";
+
+        ofs.close();
+    }
+
+    bool file_exists_and_not_empty(const std::string& filename) {
+        struct stat buffer;
+        return (stat(filename.c_str(), &buffer) == 0 && buffer.st_size > 0);
+    }
+    void ExportLineSegInfoToCSV(const std::string& input_filename) {
+        std::string output_filename = "minlinelen_numseg_info.csv";
+        std::ofstream ofs(output_filename, std::ios::app);
+        bool file_has_content = file_exists_and_not_empty(output_filename);
+        if (!ofs.is_open()) {
+            std::cerr << "Failed to open file: " << output_filename
+                      << std::endl;
+            return;
+        }
+
+        // Header
+        if (!file_has_content) {
+            ofs << "filename,min_line_length,num_segments\n";
+        }
+        ofs << input_filename << "," << min_line_length_ << ","
+            << total_num_segments_ << "\n";
+
+        ofs.close();
+    }
+
+    void ExportSegmentInfoToCSV(const std::string& input_filename,
+                                const std::vector<Segment>& segments,
+                                uint64_t total_keys) {
+        std::string output_filename = input_filename + "_seg_info_0703.csv";
+        std::ofstream ofs(output_filename);
+        if (!ofs.is_open()) {
+            std::cerr << "Failed to open file: " << output_filename
+                      << std::endl;
+            return;
+        }
+
+        // Header
+        ofs << "index_num,segment_type,start,end,num_keys,num_segments,step,"
+               "slope,intercept,offset\n";
+
+        struct LineInfo {
+            KeyType start;
+            KeyType end;
+            uint64_t num_keys;
+        };
+        std::vector<LineInfo> longest_lines;
+
+        int index = 1;
+        std::function<void(const std::vector<Segment>&)> dfs;
+        dfs = [&](const std::vector<Segment>& segs) {
+            for (const auto& seg : segs) {
+                std::string seg_type = seg.is_representation
+                                           ? "repr"
+                                           : (seg.is_line ? "line" : "spline");
+                ofs << index++ << "," << seg_type << "," << seg.start << ","
+                    << seg.end << "," << seg.num_keys_covered << ","
+                    << seg.segment_count << "," << seg.step << "," << seg.slope
+                    << "," << seg.intercept << "," << seg.offset << "\n";
+
+                if (seg.is_line) {
+                    longest_lines.push_back(
+                        {seg.start, seg.end, seg.num_keys_covered});
+                }
+
+                if (seg.children) {
+                    std::cout
+                        << "[Print] debug: Stop! should not have any children"
+                        << std::endl;
+                    dfs(*seg.children);
+                }
+            }
+        };
+
+        dfs(segments);
+        ofs.close();
+
+        // Sort and print 10 longest lines
+        std::sort(longest_lines.begin(), longest_lines.end(),
+                  [](const LineInfo& a, const LineInfo& b) {
+                      return a.num_keys > b.num_keys;
+                  });
+
+        uint64_t top_keys = 0;
+        std::cout << "Top 10 longest line segments by number of keys:\n";
+        std::cout << "Start, End, NumKeys, Percentage\n";
+        for (int i = 0;
+             i < std::min(10, static_cast<int>(longest_lines.size())); ++i) {
+            const auto& l = longest_lines[i];
+            top_keys += l.num_keys;
+            double percentage = 100.0 * l.num_keys / total_keys;
+            std::cout << l.start << ", " << l.end << ", " << l.num_keys << ", "
+                      << percentage << "%\n";
+        }
+        std::cout << "Total percentage in top 10 lines: "
+                  << (100.0 * top_keys / total_keys) << "%\n";
+    }
+
+    void SaveRootKeysToFile(const std::vector<Segment>& segments,
+                            const std::string& input_filename) {
+        // Create output filename based on input filename
+        std::string base_name =
+            input_filename.substr(0, input_filename.find_last_of('.'));
+        std::string output_filename = base_name + "_root_keys.txt";
+
+        std::ofstream ofs(output_filename);
+        if (!ofs.is_open()) {
+            std::cerr << "Failed to open file: " << output_filename
+                      << std::endl;
+            return;
+        }
+
+        // Write header with metadata
+        ofs << "# Root keys from: " << input_filename << "\n";
+        ofs << "# Min line length: " << min_line_length_ << "\n";
+        ofs << "# Top-k percentage: " << top_k_percentage_ << "\n";
+        ofs << "# Format: SegmentType(L=Line,S=Spline,R=Repr) SegmentIndex Key "
+               "Value\n";
+        ofs << "#\n";
+
+        size_t total_keys_saved = 0;
+
+        for (size_t i = 0; i < segments.size(); ++i) {
+            const auto& segment = segments[i];
+
+            if (!segment.is_representation) {
+                // Save actual keys from line/spline segments
+                char seg_type = segment.is_line ? 'L' : 'S';
+
+                for (const auto& kv : segment.data) {
+                    ofs << seg_type << " " << i << " " << kv.first << " "
+                        << kv.second << "\n";
+                    total_keys_saved++;
+                }
+            } else {
+                // For representation segments, optionally save range info
+                ofs << "R " << i << " " << segment.start << " " << segment.end
+                    << " # Representation segment covering "
+                    << segment.num_keys_covered << " keys\n";
+            }
+        }
+
+        ofs << "# Total keys saved: " << total_keys_saved << "\n";
+        ofs.close();
+
+        std::cout << "Saved " << total_keys_saved
+                  << " root keys to: " << output_filename << std::endl;
+    }
+
+    // Alternative: Save only keys (more compact)
+    void SaveRootKeysCompact(const std::vector<Segment>& segments,
+                             const std::string& input_filename) {
+        std::string base_name =
+            input_filename.substr(0, input_filename.find_last_of('.'));
+        std::string output_filename = base_name + "_root_keys_compact.csv";
+
+        std::ofstream ofs(output_filename);
+        if (!ofs.is_open()) {
+            std::cerr << "Failed to open file: " << output_filename
+                      << std::endl;
+            return;
+        }
+
+        // CSV header
+        ofs << "key,value,segment_type,segment_index\n";
+
+        for (size_t i = 0; i < segments.size(); ++i) {
+            const auto& segment = segments[i];
+
+            if (!segment.is_representation) {
+                std::string seg_type = segment.is_line ? "line" : "spline";
+
+                for (const auto& kv : segment.data) {
+                    ofs << kv.first << "," << kv.second << "," << seg_type
+                        << "," << i << "\n";
+                }
+            }
+        }
+
+        ofs.close();
+    }
+
+    void SaveKeysToFiles(
+        const std::vector<std::pair<KeyType, ValueType>>& original_data,
+        std::string filename) {
+        // Collect all keys that are in root segments
+        std::unordered_set<KeyType> root_keys;
+
+        // Iterate through root segments
+        for (const auto& segment : root_segments_) {
+            if (segment.is_representation) {
+                // Representation segments don't contain actual keys at root
+                // level
+                continue;
+            }
+
+            // Add all keys from this segment's data to root_keys set
+            for (const auto& kv : segment.data) {
+                root_keys.insert(kv.first);
+            }
+        }
+
+        // Create output filenames based on dataset name
+        std::string root_keys_filename = filename + "_root_keys.csv";
+        std::string non_root_keys_filename = filename + "_non_root_keys.csv";
+
+        // Save root keys
+        std::ofstream root_file(root_keys_filename);
+        if (!root_file.is_open()) {
+            std::cerr << "Failed to open file: " << root_keys_filename
+                      << std::endl;
+            return;
+        }
+
+        // Write root keys (sorted for consistency)
+        std::vector<KeyType> sorted_root_keys(root_keys.begin(),
+                                              root_keys.end());
+        std::sort(sorted_root_keys.begin(), sorted_root_keys.end());
+
+        for (const auto& key : sorted_root_keys) {
+            root_file << key << "\n";
+        }
+        root_file.close();
+
+        // Save non-root keys
+        std::ofstream non_root_file(non_root_keys_filename);
+        if (!non_root_file.is_open()) {
+            std::cerr << "Failed to open file: " << non_root_keys_filename
+                      << std::endl;
+            return;
+        }
+
+        // Write non-root keys (keys in original data but not in root)
+        size_t non_root_count = 0;
+        for (const auto& kv : original_data) {
+            if (root_keys.find(kv.first) == root_keys.end()) {
+                non_root_file << kv.first << "\n";
+                non_root_count++;
+            }
+        }
+        non_root_file.close();
+
+        // Print summary
+        std::cout << "[SaveKeysToFiles] trace: " << filename << std::endl;
+        std::cout << "  Root keys saved: " << root_keys.size() << " to "
+                  << root_keys_filename << std::endl;
+        std::cout << "  Non-root keys saved: " << non_root_count << " to "
+                  << non_root_keys_filename << std::endl;
+        std::cout << "  Total keys: " << original_data.size() << std::endl;
+
+        // Verify counts
+        if (root_keys.size() + non_root_count != original_data.size()) {
+            std::cerr << "[Warning] Key count mismatch! Root: "
+                      << root_keys.size() << ", Non-root: " << non_root_count
+                      << ", Total: " << original_data.size() << std::endl;
         }
     }
 

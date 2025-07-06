@@ -37,7 +37,7 @@ class HopeInterface : public indexInterface<KEY_TYPE, PAYLOAD_TYPE> {
 template <class KEY_TYPE, class PAYLOAD_TYPE>
 void HopeInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(
     std::pair<KEY_TYPE, PAYLOAD_TYPE> *key_value, size_t num, Param *param) {
-    hope_.BulkLoad(key_value, num);
+    hope_.BulkLoad(key_value, num, param->config_file);
 }
 
 template <class KEY_TYPE, class PAYLOAD_TYPE>

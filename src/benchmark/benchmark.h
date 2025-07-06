@@ -1,36 +1,35 @@
 #include <getopt.h>
+#include <jemalloc/jemalloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+
 #include <algorithm>
 #include <atomic>
+#include <ctime>
+#include <fstream>
+#include <iostream>
 #include <memory>
 #include <random>
 #include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
 #include <thread>
-#include <ctime>
+#include <vector>
 
-#include "../tscns.h"
-#include "omp.h"
-#include "tbb/parallel_sort.h"
-#include "flags.h"
-#include "utils.h"
 #include "../competitor/competitor.h"
 #include "../competitor/indexInterface.h"
+#include "../tscns.h"
+#include "flags.h"
+#include "omp.h"
 #include "pgm_metric.h"
-#include <jemalloc/jemalloc.h>
+#include "tbb/parallel_sort.h"
+#include "utils.h"
 
-template<typename KEY_TYPE, typename PAYLOAD_TYPE>
+template <typename KEY_TYPE, typename PAYLOAD_TYPE>
 class Benchmark {
-    typedef indexInterface <KEY_TYPE, PAYLOAD_TYPE> index_t;
+    typedef indexInterface<KEY_TYPE, PAYLOAD_TYPE> index_t;
 
-    enum Operation {
-        READ = 0, INSERT, DELETE, SCAN, UPDATE
-    };
+    enum Operation { READ = 0, INSERT, DELETE, SCAN, UPDATE };
 
     // parameters
     double read_ratio = 1;
@@ -45,20 +44,20 @@ class Benchmark {
     double init_table_ratio;
     double del_table_ratio;
     size_t thread_num = 1;
-    std::vector <std::string> all_index_type;
-    std::vector <std::string> all_thread_num;
+    std::vector<std::string> all_index_type;
+    std::vector<std::string> all_thread_num;
     std::string index_type;
     std::string keys_file_path;
     std::string keys_file_type;
-    std::string config_file;        // segment config file for libox
+    std::string config_file;  // segment config file for libox
     std::string sample_distribution;
     bool latency_sample = false;
     double latency_sample_ratio = 0.01;
     int error_bound;
     size_t node_capacity;
-    size_t temp_node_cap=5; // temp node capacity for retrain
-    double top_k=0.05;
-    double density_factor=3;
+    size_t temp_node_cap = 5;  // temp node capacity for retrain
+    double top_k = 0.05;
+    double density_factor = 3;
     bool use_radix = false;
     size_t num_radix_bits;
     size_t max_error_rs;
@@ -69,10 +68,10 @@ class Benchmark {
     bool dataset_statistic;
     bool data_shift = false;
 
-    std::vector <KEY_TYPE> init_keys;
+    std::vector<KEY_TYPE> init_keys;
     KEY_TYPE *keys;
-    std::pair <KEY_TYPE, PAYLOAD_TYPE> *init_key_values;
-    std::vector <std::pair<Operation, KEY_TYPE>> operations;
+    std::pair<KEY_TYPE, PAYLOAD_TYPE> *init_key_values;
+    std::vector<std::pair<Operation, KEY_TYPE>> operations;
     std::mt19937 gen;
 
     struct Stat {
@@ -99,8 +98,7 @@ class Benchmark {
         }
     } stat;
 
-    struct alignas(CACHELINE_SIZE)
-    ThreadParam {
+    struct alignas(CACHELINE_SIZE) ThreadParam {
         std::vector<std::pair<uint64_t, uint64_t>> latency;
         uint64_t success_insert = 0;
         uint64_t success_read = 0;
@@ -109,9 +107,9 @@ class Benchmark {
         uint64_t scan_not_enough = 0;
     };
     typedef ThreadParam param_t;
-public:
-    Benchmark() {
-    }
+
+   public:
+    Benchmark() {}
 
     KEY_TYPE *load_keys() {
         // Read keys from file
@@ -119,21 +117,25 @@ public:
 
         if (table_size > 0) keys = new KEY_TYPE[table_size];
 
-
         if (keys_file_type == "binary") {
             table_size = load_binary_data(keys, table_size, keys_file_path);
             if (table_size <= 0) {
-                COUT_THIS("Could not open key file, please check the path of key file.");
+                COUT_THIS(
+                    "Could not open key file, please check the path of key "
+                    "file.");
                 exit(0);
             }
         } else if (keys_file_type == "text") {
             table_size = load_text_data(keys, table_size, keys_file_path);
             if (table_size <= 0) {
-                COUT_THIS("Could not open key file, please check the path of key file.");
+                COUT_THIS(
+                    "Could not open key file, please check the path of key "
+                    "file.");
                 exit(0);
             }
         } else {
-            COUT_THIS("Could not open key file, please check the path of key file.");
+            COUT_THIS(
+                "Could not open key file, please check the path of key file.");
             exit(0);
         }
 
@@ -142,12 +144,14 @@ public:
             std::cout << "Original num of keys: " << table_size;
             auto last = std::unique(keys, keys + table_size);
             table_size = last - keys;
-            std::cout << ", min key: " << keys[0] << ", max key: " << keys[table_size-1] << std::endl;
+            std::cout << ", min key: " << keys[0]
+                      << ", max key: " << keys[table_size - 1] << std::endl;
             std::shuffle(keys, keys + table_size, gen);
         }
 
         init_table_size = init_table_ratio * table_size;
-        std::cout << "Table size is " << table_size << ", Init table size is " << init_table_size << std::endl;
+        std::cout << "Table size is " << table_size << ", Init table size is "
+                  << init_table_size << std::endl;
 
         for (auto j = 0; j < 10; j++) {
             std::cout << keys[j] << " ";
@@ -163,11 +167,13 @@ public:
         }
         tbb::parallel_sort(init_keys.begin(), init_keys.end());
 
-        init_key_values = new std::pair<KEY_TYPE, PAYLOAD_TYPE>[init_keys.size()];
+        init_key_values =
+            new std::pair<KEY_TYPE, PAYLOAD_TYPE>[init_keys.size()];
 #pragma omp parallel for num_threads(thread_num)
         for (int i = 0; i < init_keys.size(); i++) {
             init_key_values[i].first = init_keys[i];
-            init_key_values[i].second = init_keys[i];   // Use key as its value for correctness checking
+            init_key_values[i].second =
+                init_keys[i];  // Use key as its value for correctness checking
         }
         COUT_VAR(table_size);
         COUT_VAR(init_keys.size());
@@ -184,9 +190,9 @@ public:
         param.density_factor = density_factor;
         param.temp_node_cap = temp_node_cap;
         param.use_radix = use_radix;
-        param.num_radix_bits=num_radix_bits;
-        param.max_error=max_error_rs;
-        param.alpha=min_line_len;
+        param.num_radix_bits = num_radix_bits;
+        param.max_error = max_error_rs;
+        param.alpha = min_line_len;
         index->init(&param);
 
         // deal with the background thread case
@@ -197,49 +203,55 @@ public:
     }
 
     /*
-   * keys_file_path:      the path where keys file at
-   * keys_file_type:      binary or text
-   * config_file:         segment config file for libox
-   * read_ratio:          the ratio of read operation
-   * insert_ratio         the ratio of insert operation
-   * delete_ratio         the ratio of delete operation
-   * update_ratio         the ratio of update operation
-   * scan_ratio           the ratio of scan operation
-   * scan_num             the number of keys that every scan operation need to scan
-   * operations_num      the number of operations(read, insert, delete, update, scan)
-   * table_size           the total number of keys in key file
-   * init_table_size      the number of keys that will be used in bulk loading
-   * thread_num           the number of worker thread
-   * index_type           the type of index(xindex, hot, alex...). Detail could be refered to src/competitor
-   * sample_distribution  the distribution of
-   * latency_sample_ratio the ratio of latency sampling
-   * error_bound          the error bound of PGM metric
-   * output_path          the path to store result
-  */
+     * keys_file_path:      the path where keys file at
+     * keys_file_type:      binary or text
+     * config_file:         segment config file for libox
+     * read_ratio:          the ratio of read operation
+     * insert_ratio         the ratio of insert operation
+     * delete_ratio         the ratio of delete operation
+     * update_ratio         the ratio of update operation
+     * scan_ratio           the ratio of scan operation
+     * scan_num             the number of keys that every scan operation need to
+     * scan operations_num      the number of operations(read, insert, delete,
+     * update, scan) table_size           the total number of keys in key file
+     * init_table_size      the number of keys that will be used in bulk loading
+     * thread_num           the number of worker thread
+     * index_type           the type of index(xindex, hot, alex...). Detail
+     * could be refered to src/competitor sample_distribution  the distribution
+     * of latency_sample_ratio the ratio of latency sampling error_bound the
+     * error bound of PGM metric output_path          the path to store result
+     */
     inline void parse_args(int argc, char **argv) {
         auto flags = parse_flags(argc, argv);
-        keys_file_path = get_required(flags, "keys_file"); // required
+        keys_file_path = get_required(flags, "keys_file");  // required
         keys_file_type = get_with_default(flags, "keys_file_type", "binary");
-        config_file = get_required(flags, "config_file"); // required for libox
-        read_ratio = stod(get_required(flags, "read")); // required
-        insert_ratio = stod(get_with_default(flags, "insert", "0")); // required
+        config_file = get_required(flags, "config_file");  // required for libox
+        read_ratio = stod(get_required(flags, "read"));    // required
+        insert_ratio =
+            stod(get_with_default(flags, "insert", "0"));  // required
         delete_ratio = stod(get_with_default(flags, "delete", "0"));
         update_ratio = stod(get_with_default(flags, "update", "0"));
         scan_ratio = stod(get_with_default(flags, "scan", "0"));
         scan_num = stoi(get_with_default(flags, "scan_num", "100"));
-        operations_num = stoi(get_with_default(flags, "operations_num", "1000000000")); // required
+        operations_num = stoi(get_with_default(flags, "operations_num",
+                                               "1000000000"));  // required
         table_size = stoi(get_with_default(flags, "table_size", "-1"));
-        init_table_ratio = stod(get_with_default(flags, "init_table_ratio", "0.5"));
-        del_table_ratio = stod(get_with_default(flags, "del_table_ratio", "0.5"));
+        init_table_ratio =
+            stod(get_with_default(flags, "init_table_ratio", "0.5"));
+        del_table_ratio =
+            stod(get_with_default(flags, "del_table_ratio", "0.5"));
         init_table_size = 0;
-        all_thread_num = get_comma_separated(flags, "thread_num"); // required
-        all_index_type = get_comma_separated(flags, "index"); // required
-        sample_distribution = get_with_default(flags, "sample_distribution", "uniform");
+        all_thread_num = get_comma_separated(flags, "thread_num");  // required
+        all_index_type = get_comma_separated(flags, "index");       // required
+        sample_distribution =
+            get_with_default(flags, "sample_distribution", "uniform");
         latency_sample = get_boolean_flag(flags, "latency_sample");
-        latency_sample_ratio = stod(get_with_default(flags, "latency_sample_ratio", "0.01"));
+        latency_sample_ratio =
+            stod(get_with_default(flags, "latency_sample_ratio", "0.01"));
         error_bound = stoi(get_with_default(flags, "error_bound", "64"));
         node_capacity = stoul(get_with_default(flags, "node_capacity", "100"));
-        temp_node_cap = stoul(get_with_default(flags, "temp_node_cap", "5")); // for retrain
+        temp_node_cap = stoul(
+            get_with_default(flags, "temp_node_cap", "5"));  // for retrain
         top_k = stod(get_with_default(flags, "top_k", "0.05"));
         density_factor = stod(get_with_default(flags, "density_factor", "3"));
         use_radix = get_boolean_flag(flags, "use_radix");
@@ -253,16 +265,82 @@ public:
         dataset_statistic = get_boolean_flag(flags, "dataset_statistic");
         data_shift = get_boolean_flag(flags, "data_shift");
 
-        COUT_THIS("[micro] Read:Insert:Update:Scan:Delete= " << read_ratio << ":" << insert_ratio << ":" << update_ratio << ":"
-                                                      << scan_ratio << ":" << delete_ratio);
-        double ratio_sum = read_ratio + insert_ratio + delete_ratio + update_ratio + scan_ratio;
+        COUT_THIS("[micro] Read:Insert:Update:Scan:Delete= "
+                  << read_ratio << ":" << insert_ratio << ":" << update_ratio
+                  << ":" << scan_ratio << ":" << delete_ratio);
+        double ratio_sum = read_ratio + insert_ratio + delete_ratio +
+                           update_ratio + scan_ratio;
         double insert_delete = insert_ratio + delete_ratio;
-        INVARIANT(insert_delete == insert_ratio || insert_delete == delete_ratio);
-        INVARIANT(ratio_sum > 0.9999 && ratio_sum < 1.0001);  // avoid precision lost
-        INVARIANT(sample_distribution == "zipf" || sample_distribution == "uniform");
+        INVARIANT(insert_delete == insert_ratio ||
+                  insert_delete == delete_ratio);
+        INVARIANT(ratio_sum > 0.9999 &&
+                  ratio_sum < 1.0001);  // avoid precision lost
+        INVARIANT(sample_distribution == "zipf" ||
+                  sample_distribution == "uniform");
         INVARIANT(all_thread_num.size() > 0);
     }
 
+    KEY_TYPE *ReadKeysFromFile(const std::string &filename, size_t &num_keys) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file: " << filename << std::endl;
+            num_keys = 0;
+            return nullptr;
+        }
+
+        // First pass: count the number of keys
+        num_keys = 0;
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!line.empty()) {
+                num_keys++;
+            }
+        }
+
+        if (num_keys == 0) {
+            file.close();
+            return nullptr;
+        }
+
+        // Allocate memory for keys
+        KEY_TYPE *root_keys = new KEY_TYPE[num_keys];
+
+        // Second pass: read the keys
+        file.clear();
+        file.seekg(0, std::ios::beg);
+
+        size_t index = 0;
+        while (std::getline(file, line) && index < num_keys) {
+            if (!line.empty()) {
+                std::istringstream iss(line);
+                KEY_TYPE key;
+                if (iss >> key) {
+                    root_keys[index++] = key;
+                } else {
+                    std::cerr << "Failed to parse key from line: " << line
+                              << std::endl;
+                }
+            }
+        }
+
+        file.close();
+
+        // Adjust num_keys if some lines failed to parse
+        if (index < num_keys) {
+            std::cerr << "Warning: Only read " << index << " keys out of "
+                      << num_keys << std::endl;
+            num_keys = index;
+        }
+
+        return root_keys;
+    }
+
+    // Usage example:
+    // size_t num_root_keys;
+    // KEY_TYPE* root_keys = ReadKeysFromFile<KEY_TYPE>("dataset_root_keys.txt",
+    // num_root_keys);
+    // ... use root_keys ...
+    // delete[] root_keys;  // Don't forget to free the memory
 
     void generate_operations(KEY_TYPE *keys) {
         // prepare operations
@@ -270,9 +348,13 @@ public:
         COUT_THIS("sample keys.");
         KEY_TYPE *sample_ptr = nullptr;
         if (sample_distribution == "uniform") {
-            sample_ptr = get_search_keys(&init_keys[0], init_table_size, operations_num, &random_seed);
+            sample_ptr = get_search_keys(&init_keys[0], init_table_size,
+                                         operations_num, &random_seed);
+            /* sample_ptr = get_search_keys(keys, operations_num,
+                                         operations_num, &random_seed); */
         } else if (sample_distribution == "zipf") {
-            sample_ptr = get_search_keys_zipf(&init_keys[0], init_table_size, operations_num, &random_seed);
+            sample_ptr = get_search_keys_zipf(&init_keys[0], init_table_size,
+                                              operations_num, &random_seed);
         }
 
         // generate operations(read, insert, update, scan)
@@ -283,12 +365,12 @@ public:
 
         if (data_shift) {
             size_t rest_key_num = table_size - init_table_size;
-            if(rest_key_num > 0) {
+            if (rest_key_num > 0) {
                 std::sort(keys + init_table_size, keys + table_size);
                 std::random_shuffle(keys + init_table_size, keys + table_size);
             }
         }
-        
+
         size_t temp_counter = 0;
         for (size_t i = 0; i < operations_num; ++i) {
             auto prob = ratio_dis(gen);
@@ -297,25 +379,33 @@ public:
                 //     operations_num = i;
                 //     break;
                 // }
-                // operations.push_back(std::pair<Operation, KEY_TYPE>(READ, keys[temp_counter++]));
-                operations.push_back(std::pair<Operation, KEY_TYPE>(READ, sample_ptr[sample_counter++]));
+                // operations.push_back(std::pair<Operation, KEY_TYPE>(READ,
+                // keys[temp_counter++]));
+                operations.push_back(std::pair<Operation, KEY_TYPE>(
+                    READ, sample_ptr[sample_counter++]));
             } else if (prob < read_ratio + insert_ratio) {
                 if (insert_counter >= table_size) {
                     operations_num = i;
                     break;
                 }
-                operations.push_back(std::pair<Operation, KEY_TYPE>(INSERT, keys[insert_counter++]));
+                operations.push_back(std::pair<Operation, KEY_TYPE>(
+                    INSERT, keys[insert_counter++]));
             } else if (prob < read_ratio + insert_ratio + update_ratio) {
-                operations.push_back(std::pair<Operation, KEY_TYPE>(UPDATE, sample_ptr[sample_counter++]));
-            } else if (prob < read_ratio + insert_ratio + update_ratio + scan_ratio) {
-                operations.push_back(std::pair<Operation, KEY_TYPE>(SCAN, sample_ptr[sample_counter++]));
+                operations.push_back(std::pair<Operation, KEY_TYPE>(
+                    UPDATE, sample_ptr[sample_counter++]));
+            } else if (prob <
+                       read_ratio + insert_ratio + update_ratio + scan_ratio) {
+                operations.push_back(std::pair<Operation, KEY_TYPE>(
+                    SCAN, sample_ptr[sample_counter++]));
             } else {
                 if (delete_counter >= table_size) {
                     operations_num = i;
                     break;
                 }
-                operations.push_back(std::pair<Operation, KEY_TYPE>(DELETE, keys[delete_counter++]));
-                // operations.push_back(std::pair<Operation, KEY_TYPE>(DELETE, sample_ptr[sample_counter++]));
+                operations.push_back(std::pair<Operation, KEY_TYPE>(
+                    DELETE, keys[delete_counter++]));
+                // operations.push_back(std::pair<Operation, KEY_TYPE>(DELETE,
+                // sample_ptr[sample_counter++]));
             }
         }
 
@@ -332,21 +422,24 @@ public:
         printf("Begin running\n");
         auto start_time = tn.rdtsc();
         auto end_time = tn.rdtsc();
-    //    System::profile("perf.data", [&]() {
+        //    System::profile("perf.data", [&]() {
 #pragma omp parallel num_threads(thread_num)
         {
             // thread specifier
             auto thread_id = omp_get_thread_num();
             auto paramI = Param(thread_num, thread_id, node_capacity);
             // Latency Sample Variable
-            int latency_sample_interval = operations_num / (operations_num * latency_sample_ratio);
+            int latency_sample_interval =
+                operations_num / (operations_num * latency_sample_ratio);
             auto latency_sample_start_time = tn.rdtsc();
             auto latency_sample_end_time = tn.rdtsc();
             param_t &thread_param = params[thread_id];
-            thread_param.latency.reserve(operations_num / latency_sample_interval);
+            thread_param.latency.reserve(operations_num /
+                                         latency_sample_interval);
             // Operation Parameter
             PAYLOAD_TYPE val;
-            std::pair <KEY_TYPE, PAYLOAD_TYPE> *scan_result = new std::pair<KEY_TYPE, PAYLOAD_TYPE>[scan_num];
+            std::pair<KEY_TYPE, PAYLOAD_TYPE> *scan_result =
+                new std::pair<KEY_TYPE, PAYLOAD_TYPE>[scan_num];
             // waiting all thread ready
 #pragma omp barrier
 #pragma omp master
@@ -362,13 +455,13 @@ public:
 
                 if (op == READ) {  // get
                     auto ret = index->get(key, val, &paramI);
-                    if(!ret) {
-                        printf("read not found, Key %lu\n",key);
+                    if (!ret) {
+                        printf("read not found, Key %lu\n", key);
                         exit(1);
                         continue;
                     }
-                    if(val != key) {
-                        printf("read failed, Key %lu, val %llu\n",key, val);
+                    if (val != key) {
+                        printf("read failed, Key %lu, val %llu\n", key, val);
                         exit(1);
                     }
                     thread_param.success_read += ret;
@@ -384,36 +477,39 @@ public:
                 } else if (op == UPDATE) {  // update
                     auto ret = index->update(key, 234567891, &paramI);
                     thread_param.success_update += ret;
-                } else if (op == SCAN) { // scan
-                    auto scan_len = index->scan(key, scan_num, scan_result, &paramI);
+                } else if (op == SCAN) {  // scan
+                    auto scan_len =
+                        index->scan(key, scan_num, scan_result, &paramI);
                     if (scan_len != scan_num) {
                         thread_param.scan_not_enough++;
                     }
-                } else if (op == DELETE) { // delete
+                } else if (op == DELETE) {  // delete
                     auto ret = index->remove(key, &paramI);
                     thread_param.success_remove += ret;
                 }
 
                 if (latency_sample && i % latency_sample_interval == 0) {
                     latency_sample_end_time = tn.rdtsc();
-                    thread_param.latency.push_back(std::make_pair(latency_sample_start_time, latency_sample_end_time));
+                    thread_param.latency.push_back(std::make_pair(
+                        latency_sample_start_time, latency_sample_end_time));
                 }
-            } // omp for loop
+            }  // omp for loop
 #pragma omp master
             end_time = tn.rdtsc();
-        } // all thread join here
+        }  // all thread join here
 
-    //    });
+        //    });
         auto diff = tn.tsc2ns(end_time) - tn.tsc2ns(start_time);
         printf("Finish running\n");
 
-
         // gather thread local variable
-        for (auto &p: params) {
+        for (auto &p : params) {
             if (latency_sample) {
                 for (auto e : p.latency) {
-                    auto temp = (tn.tsc2ns(e.first) - tn.tsc2ns(e.second)) / (double) 1000000000;
-                    stat.latency.push_back(tn.tsc2ns(e.second) - tn.tsc2ns(e.first));
+                    auto temp = (tn.tsc2ns(e.first) - tn.tsc2ns(e.second)) /
+                                (double)1000000000;
+                    stat.latency.push_back(tn.tsc2ns(e.second) -
+                                           tn.tsc2ns(e.first));
                 }
             }
             stat.success_read += p.success_read;
@@ -423,12 +519,14 @@ public:
             stat.scan_not_enough += p.scan_not_enough;
         }
         // calculate throughput
-        stat.throughput = static_cast<uint64_t>(operations_num / (diff/(double) 1000000000));
+        stat.throughput =
+            static_cast<uint64_t>(operations_num / (diff / (double)1000000000));
 
         // calculate dataset metric
         if (dataset_statistic) {
             std::sort(keys, keys + table_size);
-            stat.fitness_of_dataset = pgmMetric::PGM_metric(keys, table_size, error_bound);
+            stat.fitness_of_dataset =
+                pgmMetric::PGM_metric(keys, table_size, error_bound);
         }
 
         // record memory consumption
@@ -474,7 +572,9 @@ public:
             std::ofstream ofile;
             ofile.open(output_path, std::ios::app);
             ofile << "id" << ",";
-            ofile << "read_ratio" << "," << "insert_ratio" << "," << "update_ratio" << "," << "scan_ratio" << "," << "delete_ratio" << ",";
+            ofile << "read_ratio" << "," << "insert_ratio" << ","
+                  << "update_ratio" << "," << "scan_ratio" << ","
+                  << "delete_ratio" << ",";
             ofile << "key_path" << ",";
             ofile << "index_type" << ",";
             ofile << "throughput" << ",";
@@ -500,21 +600,25 @@ public:
             ofile << "latency_sample" << ",";
             ofile << "data_shift" << ",";
             ofile << "pgm" << ",";
-            ofile << "error_bound" ",";
+            ofile << "error_bound" << ",";
+            ofile << "min_line_len" << ",";
+            ofile << "top_k" << ",";
             ofile << "table_size" << std::endl;
         }
 
         std::ofstream ofile;
         ofile.open(output_path, std::ios::app);
-        if (std::strftime(time_str, sizeof(time_str), "%Y%m%d%H%M%S", std::localtime(&t))) {
+        if (std::strftime(time_str, sizeof(time_str), "%Y%m%d%H%M%S",
+                          std::localtime(&t))) {
             ofile << time_str << ',';
         }
-        ofile << read_ratio << "," << insert_ratio << "," << update_ratio << "," << scan_ratio << "," << delete_ratio << ",";
+        ofile << read_ratio << "," << insert_ratio << "," << update_ratio << ","
+              << scan_ratio << "," << delete_ratio << ",";
 
         ofile << keys_file_path << ",";
         ofile << index_type << ",";
         ofile << stat.throughput << ",";
-        ofile << init_table_ratio<< ",";
+        ofile << init_table_ratio << ",";
         ofile << init_table_size << ",";
         ofile << stat.memory_consumption << ",";
         ofile << thread_num << ",";
@@ -548,6 +652,8 @@ public:
         ofile << data_shift << ",";
         ofile << stat.fitness_of_dataset << ",";
         ofile << error_bound << ",";
+        ofile << min_line_len << ",";
+        ofile << top_k << ",";
         ofile << table_size << std::endl;
         ofile.close();
 
@@ -556,11 +662,22 @@ public:
 
     void run_benchmark() {
         load_keys();
+        /* size_t num_root_keys = 0;
+        // std::string filename = config_file + "_root_keys.csv";
+        std::string filename = config_file + "_non_root_keys.csv";
+        KEY_TYPE *root_keys = ReadKeysFromFile(filename, num_root_keys); 
+        operations_num = num_root_keys;
+        
+        std::cout << "[Temp] filename=" << filename
+                  << "; num_keys=" << num_root_keys
+                  << ", operation num=" << operations_num << std::endl;
+        generate_operations(root_keys); */
         generate_operations(keys);
-        for (auto s: all_index_type) {
-            std::cout << "=============================================" << std::endl;
+        for (auto s : all_index_type) {
+            std::cout << "============================================="
+                      << std::endl;
             std::cout << "Start testing " << s << " ..." << std::endl;
-            for (auto t: all_thread_num) {
+            for (auto t : all_thread_num) {
                 thread_num = stoi(t);
                 index_type = s;
                 index_t *index;
@@ -570,5 +687,4 @@ public:
             }
         }
     }
-
 };
