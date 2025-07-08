@@ -603,6 +603,9 @@ class Benchmark {
             ofile << "error_bound" << ",";
             ofile << "min_line_len" << ",";
             ofile << "top_k" << ",";
+            ofile << "node_capacity" << ",";
+            ofile << "density_factor" << ",";
+            ofile << "temp_node_cap" << ",";
             ofile << "table_size" << std::endl;
         }
 
@@ -654,6 +657,9 @@ class Benchmark {
         ofile << error_bound << ",";
         ofile << min_line_len << ",";
         ofile << top_k << ",";
+        ofile << node_capacity << ",";
+        ofile << density_factor << ",";
+        ofile << temp_node_cap << ",";
         ofile << table_size << std::endl;
         ofile.close();
 
@@ -665,9 +671,9 @@ class Benchmark {
         /* size_t num_root_keys = 0;
         // std::string filename = config_file + "_root_keys.csv";
         std::string filename = config_file + "_non_root_keys.csv";
-        KEY_TYPE *root_keys = ReadKeysFromFile(filename, num_root_keys); 
+        KEY_TYPE *root_keys = ReadKeysFromFile(filename, num_root_keys);
         operations_num = num_root_keys;
-        
+
         std::cout << "[Temp] filename=" << filename
                   << "; num_keys=" << num_root_keys
                   << ", operation num=" << operations_num << std::endl;

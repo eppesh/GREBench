@@ -42,13 +42,14 @@ class Hope {
         double child_slope = 0.0;
         double child_intercept = 0.0;
 
-        bool is_empty = false;   
+        bool is_empty = false;
         KeyType allocated_start;
         KeyType allocated_end;
 
-        Segment() : start(0), end(0), is_line(false), step(0), is_empty(false) {}
+        Segment()
+            : start(0), end(0), is_line(false), step(0), is_empty(false) {}
 
-        Segment(KeyType s, KeyType e, bool line = false, bool empty = false) 
+        Segment(KeyType s, KeyType e, bool line = false, bool empty = false)
             : start(s), end(e), is_line(line), step(0), is_empty(empty) {
             if (empty) {
                 allocated_start = s;
@@ -73,7 +74,7 @@ class Hope {
               child_seg_index(std::move(other.child_seg_index)),
               child_slope(other.child_slope),
               child_intercept(other.child_intercept),
-              is_empty(other.is_empty),    
+              is_empty(other.is_empty),
               allocated_start(other.allocated_start),
               allocated_end(other.allocated_end) {}
 
@@ -95,8 +96,8 @@ class Hope {
                 child_seg_index = std::move(other.child_seg_index);
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
-                is_empty = other.is_empty;                   
-                allocated_start = other.allocated_start;    
+                is_empty = other.is_empty;
+                allocated_start = other.allocated_start;
                 allocated_end = other.allocated_end;
             }
             return *this;
@@ -118,9 +119,9 @@ class Hope {
               child_seg_index(other.child_seg_index),
               child_slope(other.child_slope),
               child_intercept(other.child_intercept),
-              is_empty(other.is_empty),     
-              allocated_start(other.allocated_start),   
-              allocated_end(other.allocated_end) { 
+              is_empty(other.is_empty),
+              allocated_start(other.allocated_start),
+              allocated_end(other.allocated_end) {
             if (other.children) {
                 children =
                     std::make_unique<std::vector<Segment>>(*other.children);
@@ -144,9 +145,9 @@ class Hope {
                 child_seg_index = other.child_seg_index;
                 child_slope = other.child_slope;
                 child_intercept = other.child_intercept;
-                is_empty = other.is_empty;            
-                allocated_start = other.allocated_start; 
-                allocated_end = other.allocated_end; 
+                is_empty = other.is_empty;
+                allocated_start = other.allocated_start;
+                allocated_end = other.allocated_end;
 
                 if (other.children) {
                     children =
@@ -213,7 +214,8 @@ class Hope {
         default_temp_node_capacity_ = temp_node_capacity;
     }
     // Bulk loading
-    void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num, std::string filename) {
+    void BulkLoad(const std::pair<KeyType, ValueType>* key_value, size_t num,
+                  std::string filename) {
         if (num == 0 || key_value == nullptr) return;
 
         // Create vector from array without copying - just wrap the data
@@ -235,7 +237,8 @@ class Hope {
 
         // Step 2: Build tree structure
         total_num_segments_ = segments.size();
-        root_segments_ = BuildTreeLevel(std::move(segments), node_capacity_, true);
+        root_segments_ =
+            BuildTreeLevel(std::move(segments), node_capacity_, true);
 
         // Update segment counts
         UpdateSegmentCounts(root_segments_);
@@ -254,12 +257,9 @@ class Hope {
         // SaveKeysToFiles(data, filename);
     }
 
-    
-
-    bool InsertInSegments(std::vector<Segment>& segments, KeyType key, 
-                     const ValueType& value, Segment* parent_segment, 
-                     int& root_segment_idx) {
-        
+    bool InsertInSegments(std::vector<Segment>& segments, KeyType key,
+                          const ValueType& value, Segment* parent_segment,
+                          int& root_segment_idx) {
         if (segments.empty()) {
             Segment point_seg;
             point_seg.start = key;
@@ -283,33 +283,35 @@ class Hope {
         }
 
         int seg_index = FindSegmentForLookup(segments, key);
-        
+
         Segment& target_seg = segments[seg_index];
-        
+
         if (&segments == &root_segments_) {
             root_segment_idx = seg_index;
         }
 
         if (target_seg.is_empty) {
-            if (key >= target_seg.allocated_start && key <= target_seg.allocated_end) {
+            if (key >= target_seg.allocated_start &&
+                key <= target_seg.allocated_end) {
                 return ActivateAndUpdateEmptySegment(target_seg, key, value);
             }
         }
-        
+
         if (target_seg.is_representation) {
             if (!target_seg.children) {
                 target_seg.children = std::make_unique<std::vector<Segment>>();
             }
             root_segment_idx = -1;
-            return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+            return InsertInSegments(*target_seg.children, key, value,
+                                    &target_seg, root_segment_idx);
         }
-        
+
         if (key >= target_seg.start && key <= target_seg.end) {
-            if (target_seg.num_keys_covered < max_error_ && !target_seg.is_line) {
-                auto insert_pos = std::lower_bound(target_seg.data.begin(), target_seg.data.end(), key,
-                                    [](const auto& pair, KeyType k) {
-                                        return pair.first < k;
-                                    });
+            if (target_seg.num_keys_covered < max_error_ &&
+                !target_seg.is_line) {
+                auto insert_pos = std::lower_bound(
+                    target_seg.data.begin(), target_seg.data.end(), key,
+                    [](const auto& pair, KeyType k) { return pair.first < k; });
                 target_seg.data.insert(insert_pos, std::make_pair(key, value));
                 target_seg.num_keys_covered++;
                 return true;
@@ -318,20 +320,20 @@ class Hope {
                 target_seg.children = std::make_unique<std::vector<Segment>>();
             }
             root_segment_idx = -1;
-            return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+            return InsertInSegments(*target_seg.children, key, value,
+                                    &target_seg, root_segment_idx);
         } else {
             if (target_seg.data.size() < max_error_ && !target_seg.is_line) {
-                auto insert_pos = std::lower_bound(target_seg.data.begin(), target_seg.data.end(), key,
-                                                [](const auto& pair, KeyType k) {
-                                                    return pair.first < k;
-                                                });
-                
+                auto insert_pos = std::lower_bound(
+                    target_seg.data.begin(), target_seg.data.end(), key,
+                    [](const auto& pair, KeyType k) { return pair.first < k; });
+
                 target_seg.data.insert(insert_pos, std::make_pair(key, value));
                 target_seg.num_keys_covered++;
-                
+
                 if (key < target_seg.start) target_seg.start = key;
                 if (key > target_seg.end) target_seg.end = key;
-                
+
                 return true;
             } else {
                 if (segments.size() < max_error_) {
@@ -342,23 +344,24 @@ class Hope {
                     new_segment.data.emplace_back(key, value);
                     new_segment.num_keys_covered = 1;
                     new_segment.segment_count = 1;
-                    
+
                     int current_seg_index = seg_index;
                     int insert_pos;
-                    
+
                     if (key < target_seg.start) {
                         insert_pos = current_seg_index;
                     } else {
                         insert_pos = current_seg_index + 1;
                     }
-                    
-                    segments.insert(segments.begin() + insert_pos, std::move(new_segment));
-                    
+
+                    segments.insert(segments.begin() + insert_pos,
+                                    std::move(new_segment));
+
                     total_num_segments_++;
                     if (parent_segment) {
                         parent_segment->segment_count++;
                     }
-                    
+
                     if (&segments == &root_segments_) {
                         RebuildRootIndex();
                         if (key < target_seg.start) {
@@ -367,14 +370,16 @@ class Hope {
                             root_segment_idx = current_seg_index;
                         }
                     }
-                    
+
                     return true;
                 } else {
                     if (!target_seg.children) {
-                        target_seg.children = std::make_unique<std::vector<Segment>>();
+                        target_seg.children =
+                            std::make_unique<std::vector<Segment>>();
                     }
                     root_segment_idx = -1;
-                    return InsertInSegments(*target_seg.children, key, value, &target_seg, root_segment_idx);
+                    return InsertInSegments(*target_seg.children, key, value,
+                                            &target_seg, root_segment_idx);
                 }
             }
         }
@@ -383,13 +388,14 @@ class Hope {
     // Insert a single key-value pair
     bool Insert(KeyType key, const ValueType& value) {
         int root_idx = -1;
-        bool result = InsertInSegments(root_segments_, key, value, nullptr, root_idx);
-        
+        bool result =
+            InsertInSegments(root_segments_, key, value, nullptr, root_idx);
+
         if (result && root_idx != -1) {
             // Check if retrain is needed
             CheckAndRetrain(root_idx);
         }
-        
+
         return result;
     }
 
@@ -413,9 +419,9 @@ class Hope {
     // LOOKUP METHODS
     // ====================================================================
 
-    void PreallocateEmptySegmentsInLevel(std::vector<Segment>& segments, 
-                                        size_t level_capacity, bool is_root_level = false) {
-        
+    void PreallocateEmptySegmentsInLevel(std::vector<Segment>& segments,
+                                         size_t level_capacity,
+                                         bool is_root_level = false) {
         if (!IsLeafLevel(segments)) {
             return;
         }
@@ -426,13 +432,14 @@ class Hope {
             if (IsLeafSegment(segments[i]) && IsLeafSegment(segments[i + 1])) {
                 KeyType gap_start = segments[i].end + 1;
                 KeyType gap_end = segments[i + 1].start - 1;
-                
+
                 if (gap_end >= gap_start) {
                     Segment empty_seg(gap_start, gap_end, false, true);
                     empty_seg.segment_count = 1;
                     empty_seg.num_keys_covered = 0;
-                    
-                    segments.insert(segments.begin() + i + 1, std::move(empty_seg));
+
+                    segments.insert(segments.begin() + i + 1,
+                                    std::move(empty_seg));
                     total_num_segments_++;
                 }
             }
@@ -445,6 +452,9 @@ class Hope {
                 return false;
             }
         }
+        /* if(&segments == &root_segments_){
+            return false;
+        } */
         return true;
     }
 
@@ -452,7 +462,8 @@ class Hope {
         return !segment.is_representation && !segment.is_empty;
     }
 
-    bool ActivateAndUpdateEmptySegment(Segment& empty_seg, KeyType key, const ValueType& value) {
+    bool ActivateAndUpdateEmptySegment(Segment& empty_seg, KeyType key,
+                                       const ValueType& value) {
         empty_seg.is_empty = false;
         empty_seg.start = key;
         empty_seg.end = key;
@@ -463,15 +474,16 @@ class Hope {
         return true;
     }
 
-    bool UpdateExistingSegment(Segment& segment, KeyType key, const ValueType& value, int segment_idx) {
+    bool UpdateExistingSegment(Segment& segment, KeyType key,
+                               const ValueType& value, int segment_idx) {
         segment.data.emplace_back(key, value);
         segment.num_keys_covered++;
-        
+
         if (key < segment.start) segment.start = key;
         if (key > segment.end) segment.end = key;
-        
+
         CheckAndRetrainRelaxed(segment_idx);
-        
+
         return true;
     }
 
@@ -479,15 +491,16 @@ class Hope {
         if (root_idx < 0 || root_idx >= root_segments_.size()) return;
 
         const Segment& segment = root_segments_[root_idx];
-        
-        double density = static_cast<double>(segment.segment_count) * 
-                        node_capacity_ / total_num_segments_;
+
+        double density = static_cast<double>(segment.segment_count) *
+                         node_capacity_ / total_num_segments_;
 
         double relaxed_threshold = density_factor_ * 3.0;
-        
+
         if (density > relaxed_threshold) {
-            std::cout << "[CheckAndRetrainRelaxed] Triggering retrain for segment " 
-                      << root_idx << ", density=" << density << std::endl;
+            std::cout
+                << "[CheckAndRetrainRelaxed] Triggering retrain for segment "
+                << root_idx << ", density=" << density << std::endl;
             RetrainWithNeighbors(root_idx);
         }
     }
@@ -634,7 +647,7 @@ class Hope {
     // INSERT METHODS
     // ====================================================================
 
-    bool InsertPointSegment(std::vector<Segment>& segments,
+    /* bool InsertPointSegment(std::vector<Segment>& segments,
                             const Segment& point_seg, Segment* parent_segment,
                             int& root_segment_idx) {
         if (segments.empty()) {
@@ -764,7 +777,7 @@ class Hope {
         }
 
         return left;
-    }
+    } */
 
     // ====================================================================
     // SEGMENT SEARCH AND INDEXING METHODS
@@ -1076,8 +1089,10 @@ class Hope {
     }
 
     std::vector<Segment> BuildTreeLevel(std::vector<Segment> segments,
-                                        size_t current_node_capacity, bool is_root_level = false) {
-        PreallocateEmptySegmentsInLevel(segments, current_node_capacity, is_root_level);
+                                        size_t current_node_capacity,
+                                        bool is_root_level = false) {
+        PreallocateEmptySegmentsInLevel(segments, current_node_capacity,
+                                        is_root_level);
 
         if (segments.size() <= current_node_capacity * 2) {
             return segments;
@@ -1112,9 +1127,11 @@ class Hope {
         }
 
         CreateGroupRepresentations(segments, is_top_segment, segments_per_group,
-                                   current_node_capacity, result_segments, is_root_level);
+                                   current_node_capacity, result_segments,
+                                   is_root_level);
 
-        PreallocateEmptySegmentsInLevel(result_segments, current_node_capacity, is_root_level);
+        PreallocateEmptySegmentsInLevel(result_segments, current_node_capacity,
+                                        is_root_level);
 
         return result_segments;
     }
@@ -1191,8 +1208,7 @@ class Hope {
 
             // Recursively build child level if needed
             child_segments = BuildTreeLevel(std::move(child_segments),
-                                        current_node_capacity, false);
-
+                                            current_node_capacity, false);
 
             repr_segment.children = std::make_unique<std::vector<Segment>>(
                 std::move(child_segments));
@@ -1425,9 +1441,11 @@ class Hope {
         std::vector<Segment> new_segments =
             FindLinesAndCreateSegments(retrain_data);
 
-        PreallocateEmptySegmentsInLevel(new_segments, temp_node_capacity, false);
+        PreallocateEmptySegmentsInLevel(new_segments, temp_node_capacity,
+                                        false);
         if (new_segments.size() > temp_node_capacity * 3) {
-            new_segments = BuildTreeLevel(std::move(new_segments), temp_node_capacity, false);
+            new_segments = BuildTreeLevel(std::move(new_segments),
+                                          temp_node_capacity, false);
         }
 
         if (new_segments.size() > temp_node_capacity) {
@@ -1507,7 +1525,8 @@ class Hope {
             // Build children
             std::vector<Segment> child_segments =
                 FindLinesAndCreateSegments(compress_data);
-            PreallocateEmptySegmentsInLevel(child_segments, node_capacity_, false);
+            PreallocateEmptySegmentsInLevel(child_segments, node_capacity_,
+                                            false);
 
             repr_seg.children = std::make_unique<std::vector<Segment>>(
                 std::move(child_segments));
