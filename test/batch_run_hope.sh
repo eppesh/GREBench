@@ -13,116 +13,37 @@
 # ==============================================================================
 
 # Default configuration
-#TRACE_DIR="/home/shuaihua/traces/libox/alpha_beta"
-#SEGMENT_DIR="/home/shuaihua/traces/libox/alpha_beta/segments"
-TRACE_DIR="/mnt/shared_traces/hope"
+TRACE_DIR="/home/shuaihua/traces/hope"
 SEGMENT_DIR="/home/shuaihua/traces/libox/segments"
-# TRACE_DIR="/home/shuaihua/traces/libox/memory_test"
-# SEGMENT_DIR="/home/shuaihua/traces/libox/memory_test/segments"
 RESULT_DIR="../result/hope"
 PROGRAM_BASE="../build"
 DATE_TAG=$(date +"%m%d")
 OUTPUT_FILE="$RESULT_DIR/out_hope_$DATE_TAG.csv"
 
-# Available configurations 
-#ALL_TRACES=(
-    # "fb_10_10.csv"
-    # "fb_20_10.csv"
-    # "fb_30_10.csv"
-    # "fb_40_10.csv"
-    # "fb_50_5.csv"
-    # "fb_50_10.csv"
-    # "fb_50_20.csv"
-    # "fb_50_30.csv"
-    # "fb_50_40.csv"
-    # "fb_50_50.csv"
-    # "fb_60_10.csv"
-    # "fb_70_10.csv"
-    # "fb_80_10.csv"
-    # "osm_10_10.csv"
-    # "osm_20_10.csv"
-    # "osm_30_10.csv"
-    # "osm_40_10.csv"
-    # "osm_50_5.csv"
-    # "osm_50_10.csv"
-    # "osm_50_20.csv"
-    # "osm_50_30.csv"
-    # "osm_50_40.csv"
-    # "osm_50_50.csv"
-    # "osm_60_10.csv"
-    # "osm_70_10.csv"
-    # "osm_80_10.csv"
-    # "genome_10_10.csv"
-    # "genome_20_10.csv"
-    # "genome_30_10.csv"
-    # "genome_40_10.csv"
-    # "genome_50_5.csv"
-    # "genome_50_10.csv"
-    # "genome_50_20.csv"
-    # "genome_50_30.csv"
-    # "genome_50_40.csv"
-    # "genome_50_50.csv"
-    # "genome_60_10.csv"
-    # "genome_70_10.csv"
-    # "genome_80_10.csv"
-    # "w048_10_10.csv"
-    # "w048_20_10.csv"
-    # "w048_30_10.csv"
-    # "w048_40_10.csv"
-    # "w048_50_5.csv"
-    # "w048_50_10.csv"
-    # "w048_50_20.csv"
-    # "w048_50_30.csv"
-    # "w048_50_40.csv"
-    # "w048_50_50.csv"
-    # "w048_60_10.csv"
-    # "w048_70_10.csv"
-    # "w048_80_10.csv"
-    # "planet_10_10.csv"
-    # "planet_20_10.csv"
-    # "planet_30_10.csv"
-    # "planet_40_10.csv"
-    # "planet_50_5.csv"
-    # "planet_50_10.csv"
-    # "planet_50_20.csv"
-    # "planet_50_30.csv"
-    # "planet_50_40.csv"
-    # "planet_50_50.csv"
-    # "planet_60_10.csv"
-    # "planet_70_10.csv"
-    # "planet_80_10.csv"
-    # "longitudes_10_10.csv"
-    # "longitudes_20_10.csv"
-    # "longitudes_30_10.csv"
-    # "longitudes_40_10.csv"
-    # "longitudes_50_5.csv"
-    # "longitudes_50_10.csv"
-    # "longitudes_50_20.csv"
-    # "longitudes_50_30.csv"
-    # "longitudes_50_40.csv"
-    # "longitudes_50_50.csv"
-    # "longitudes_60_10.csv"
-    # "longitudes_70_10.csv"
-    # "longitudes_80_10.csv"
- #)
 ALL_TRACES=()
 # Add w001.csv to w106.csv
 # for i in $(seq -w 1 106); do
 #     ALL_TRACES+=("w${i}.csv")
 # done
-# ALL_TRACES=("umass_financial1"  "umass_financial2"  "umass_websearch1"  "umass_websearch2"  "umass_websearch3")
-#ALL_TRACES=("msr_proj.csv"  "msr_src1.csv"  "msr_src2.csv"  "msr_web.csv")
-ALL_TRACES=("msr_proj.csv" "msr_src1.csv" "msr_src2.csv" "msr_web.csv" "umass_financial1.csv" "w025.csv" "w046.csv" "w048.csv" "w054.csv" "w056.csv" "w057.csv" "w087.csv")
 
+# Add fiu_mail1.csv to fiu_mail23.csv
+# for i in $(seq 1 21); do
+#     ALL_TRACES+=("fiu_web${i}.csv")
+# done
+# ALL_TRACES=("umass_financial1"  "umass_financial2"  "umass_websearch1"  "umass_websearch2"  "umass_websearch3")
+# ALL_TRACES=("msr_proj.csv"  "msr_src1.csv"  "msr_src2.csv"  "msr_web.csv")
+# ALL_TRACES=("covid.csv" "genome.csv" "osm.csv" "fb.csv" "longitudes-200M.csv" "msr_proj.csv" "msr_src1.csv" "msr_src2.csv" "msr_web.csv" "umass_financial1.csv" "umass_financial2.csv" "umass_websearch1.csv" "umass_websearch2.csv" "umass_websearch3.csv" "w025.csv" "w046.csv" "w048.csv" "w054.csv" "w056.csv" "w057.csv" "w087.csv")
+#ALL_TRACES=("msr_proj.csv" "msr_src1.csv" "msr_src2.csv" "msr_web.csv" "umass_financial1.csv" "umass_financial2.csv" "umass_websearch1.csv" "umass_websearch2.csv" "umass_websearch3.csv" "w025.csv" "w046.csv" "w048.csv" "w054.csv" "w056.csv" "w057.csv" "w087.csv" "w019.csv" "w027.csv" "w030.csv" "w045.csv" "w080.csv" "w096.csv")
+ALL_TRACES=(    
+    "umass_financial1.csv" "w048.csv" "w054.csv" "msr_proj.csv" "msr_src2.csv" "fiu_mail15.csv" "fiu_mail20.csv"
+)
+# ALL_TRACES=(    
+#     "fiu_mail10.csv" "fiu_mail21.csv" "w045.csv" "w056.csv" "w057.csv" "w087.csv" "umass_websearch1.csv" "umass_websearch3.csv"
+#      "fiu_web12.csv" "fiu_web9.csv" "fiu_web11.csv" "fiu_web14.csv" "fiu_web6.csv" "fiu_web10.csv"
+# )
 # echo "${ALL_TRACES[@]}"  # Correct way to print all elements
 # exit
 
-# ALL_TRACES=(
-#     "fb_100.csv"  "fb_60.csv"       "genome_20.csv"  "genome_80.csv"            "longitudes-200M_40.csv"  "msr_web_100.csv"  "msr_web_60.csv"  "osm_20.csv"  "osm_80.csv"    "w048_20.csv"  "w048_80.csv"
-#     "fb_20.csv"   "fb_80.csv"       "genome_40.csv"  "longitudes-200M_100.csv"  "longitudes-200M_60.csv"  "msr_web_20.csv"   "msr_web_80.csv"  "osm_40.csv"  "w048_40.csv"
-#     "fb_40.csv"   "genome_100.csv"  "genome_60.csv"  "longitudes-200M_20.csv"   "longitudes-200M_80.csv"  "msr_web_40.csv"   "osm_100.csv"     "osm_60.csv"  "w048_100.csv"  "w048_60.csv"
-# )
-# ALL_SEGMENTS=("segments_osm.csv" "segments_genome.csv" "segments_fb.csv" "segments_w027.csv" "segments_w045.csv" "segments_longitudes-200M.csv" "segments_msr_web.csv" "segments_w048.csv" "segments_umass_financial1.csv")
 ALL_SEGMENTS=(
     "segments_osm.csv",
     "segments_genome.csv",
@@ -131,93 +52,8 @@ ALL_SEGMENTS=(
     "segments_msr_web.csv",
     "segments_w048.csv"
 )
-# ALL_SEGMENTS=(
-#     "segments_fb_100.csv"  "segments_fb_80.csv"       "segments_genome_60.csv"            "segments_longitudes-200M_40.csv"  "segments_msr_web_20.csv"  "segments_osm_100.csv"  "segments_osm_80.csv"    "segments_w048_60.csv"
-#     "segments_fb_20.csv"   "segments_genome_100.csv"  "segments_genome_80.csv"            "segments_longitudes-200M_60.csv"  "segments_msr_web_40.csv"  "segments_osm_20.csv"   "segments_w048_100.csv"  "segments_w048_80.csv"
-#     "segments_fb_40.csv"   "segments_genome_20.csv"   "segments_longitudes-200M_100.csv"  "segments_longitudes-200M_80.csv"  "segments_msr_web_60.csv"  "segments_osm_40.csv"   "segments_w048_20.csv"
-#     "segments_fb_60.csv"   "segments_genome_40.csv"   "segments_longitudes-200M_20.csv"   "segments_msr_web_100.csv"         "segments_msr_web_80.csv"  "segments_osm_60.csv"   "segments_w048_40.csv"
-# )
-#ALL_SEGMENTS=(
-    # "segments_fb_10_10.csv",
-    # "segments_fb_20_10.csv",
-    # "segments_fb_30_10.csv",
-    # "segments_fb_40_10.csv",
-    # "segments_fb_50_5.csv",
-    # "segments_fb_50_10.csv",
-    # "segments_fb_50_20.csv",
-    # "segments_fb_50_30.csv",
-    # "segments_fb_50_40.csv",
-    # "segments_fb_50_50.csv",
-    # "segments_fb_60_10.csv",
-    # "segments_fb_70_10.csv",
-    # "segments_fb_80_10.csv",    
-    # "segments_osm_10_10.csv",
-    # "segments_osm_20_10.csv",
-    # "segments_osm_30_10.csv",
-    # "segments_osm_40_10.csv",
-    # "segments_osm_50_5.csv",
-    # "segments_osm_50_10.csv",
-    # "segments_osm_50_20.csv",
-    # "segments_osm_50_30.csv",
-    # "segments_osm_50_40.csv",
-    # "segments_osm_50_50.csv",
-    # "segments_osm_60_10.csv",
-    # "segments_osm_70_10.csv",
-    # "segments_osm_80_10.csv",
-    # "segments_genome_10_10.csv",
-    # "segments_genome_20_10.csv",
-    # "segments_genome_30_10.csv",
-    # "segments_genome_40_10.csv",
-    # "segments_genome_50_5.csv",
-    # "segments_genome_50_10.csv",
-    # "segments_genome_50_20.csv",
-    # "segments_genome_50_30.csv",
-    # "segments_genome_50_40.csv",
-    # "segments_genome_50_50.csv",
-    # "segments_genome_60_10.csv",
-    # "segments_genome_70_10.csv",
-    # "segments_genome_80_10.csv",
-    # "segments_w048_10_10.csv",
-    # "segments_w048_20_10.csv",
-    # "segments_w048_30_10.csv",
-    # "segments_w048_40_10.csv",
-    # "segments_w048_50_5.csv",
-    # "segments_w048_50_10.csv",
-    # "segments_w048_50_20.csv",
-    # "segments_w048_50_30.csv",
-    # "segments_w048_50_40.csv",
-    # "segments_w048_50_50.csv",
-    # "segments_w048_60_10.csv",
-    # "segments_w048_70_10.csv",
-    # "segments_w048_80_10.csv",
-    # "segments_planet_10_10.csv",
-    # "segments_planet_20_10.csv",
-    # "segments_planet_30_10.csv",
-    # "segments_planet_40_10.csv",
-    # "segments_planet_50_5.csv",
-    # "segments_planet_50_10.csv",
-    # "segments_planet_50_20.csv",
-    # "segments_planet_50_30.csv",
-    # "segments_planet_50_40.csv",
-    # "segments_planet_50_50.csv",
-    # "segments_planet_60_10.csv",
-    # "segments_planet_70_10.csv",
-    # "segments_planet_80_10.csv",
-    # "segments_longitudes_10_10.csv",
-    # "segments_longitudes_20_10.csv",
-    # "segments_longitudes_30_10.csv",
-    # "segments_longitudes_40_10.csv",
-    # "segments_longitudes_50_5.csv",
-    # "segments_longitudes_50_10.csv",
-    # "segments_longitudes_50_20.csv",
-    # "segments_longitudes_50_30.csv",
-    # "segments_longitudes_50_40.csv",
-    # "segments_longitudes_50_50.csv",
-    # "segments_longitudes_60_10.csv",
-    # "segments_longitudes_70_10.csv",
-    # "segments_longitudes_80_10.csv",
-#)
-ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80" "init20" "init40" "init60" "init80" "init100" "scanonly" "ycsbe" "scan10" "scan100" "scan1000" "scan10000" "scan100000" "scan500" "scan1500" "scan2000" "scan2500")
+ALL_WORKLOADS=("readonly" "balanced" "writeonly" "read20" "read40" "read60" "read80" "init20" "init40" "init60" "init80" "init100" "scanonly" "ycsbe" "scan10" "scan100" "scan1000" "scan10000" "scan100000" "scan500" "scan1500" "scan2000" "scan2500"
+"readheavy95" "readheavy80" "readheavy70")
 ALL_THREAD_COUNTS=(1 8 16 24 32 40 48 56 64 72 80 84)
 DEFAULT_INDEX_LIST="alexol,lippol,btreeolc,artolc,libox,xindex"
 ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "artolc" "libox" "xindex" "loft" "pgm" "rs" "hope" "lisa")
@@ -225,6 +61,9 @@ ALL_INDEXES=("alex" "alexol" "lipp" "lippol" "btree" "btreeolc" "artunsync" "art
 # Define workload configurations
 declare -A WORKLOAD_PARAMS
 WORKLOAD_PARAMS[readonly]="--read=1.0 --insert=0.0 --init_table_ratio=1 --operations_num=100000000"
+WORKLOAD_PARAMS[readheavy95]="--read=0.95 --insert=0.05 --init_table_ratio=0.5 --operations_num=100000000"
+WORKLOAD_PARAMS[readheavy80]="--read=0.8 --insert=0.2 --init_table_ratio=0.5 --operations_num=100000000"
+WORKLOAD_PARAMS[readheavy70]="--read=0.7 --insert=0.3 --init_table_ratio=0.5 --operations_num=100000000"
 WORKLOAD_PARAMS[read20]="--read=0.2 --insert=0.8 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[read40]="--read=0.4 --insert=0.6 --init_table_ratio=0.5 --operations_num=200000000"
 WORKLOAD_PARAMS[balanced]="--read=0.5 --insert=0.5 --init_table_ratio=0.5 --operations_num=100000000"
@@ -449,12 +288,12 @@ for trace_name in "${SELECTED_TRACES[@]}"; do
                 ${WORKLOAD_PARAMS[$workload_name]} \
                 --output_path="$OUTPUT_FILE" \
                 --table_size=-1 \
-                --node_capacity=100000 \
-                --top_k=0.05 \
+                --node_capacity=100 \
+                --top_k=0.5 \
                 --density_factor=4 \
                 --temp_node_cap=20 \
                 --max_error_rs=32 \
-                --min_line_len=10 \
+                --min_line_len=100 \
                 --thread_num="$thread_num" \
                 --index="$INDEX_LIST"
                 

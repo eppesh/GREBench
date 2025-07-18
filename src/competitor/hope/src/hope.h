@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>  // std::setprecision(n), std::fixed
+#include <map>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -201,7 +202,9 @@ class Hope {
           top_k_percentage_(top_k),
           max_error_(max_error),
           min_line_length_(min_line_len),
-          use_radix_table_(use_radix) {}
+          use_radix_table_(use_radix) {
+        root_segments_.reserve(node_capacity_ * 2);
+    }
 
     void SetParameters(size_t node_capacity, double top_k, size_t max_error,
                        size_t min_line_length, bool use_radix,
@@ -255,6 +258,7 @@ class Hope {
         // PrintTree();
         // TestRoot(filename, root_segments_, num);
         // SaveKeysToFiles(data, filename);
+        ExportLineSegInfoToCSV(filename);
     }
 
     bool InsertInSegments(std::vector<Segment>& segments, KeyType key,
@@ -341,6 +345,7 @@ class Hope {
                     new_segment.start = key;
                     new_segment.end = key;
                     new_segment.is_line = false;
+                    new_segment.data.reserve(max_error_);
                     new_segment.data.emplace_back(key, value);
                     new_segment.num_keys_covered = 1;
                     new_segment.segment_count = 1;
@@ -572,6 +577,7 @@ class Hope {
                    << ", segment.start=" << segment.start
                    << ", segment.end=" << segment.end << std::endl;
          return LookupInSplineSegment(segment, key, value); */
+        return false;
     }
 
     bool LookupInSplineSegment(const Segment& segment, KeyType key,
@@ -1793,7 +1799,7 @@ class Hope {
         return (stat(filename.c_str(), &buffer) == 0 && buffer.st_size > 0);
     }
     void ExportLineSegInfoToCSV(const std::string& input_filename) {
-        std::string output_filename = "minlinelen_numseg_info.csv";
+        std::string output_filename = "minlinelen_numseg_info_0710.csv";
         std::ofstream ofs(output_filename, std::ios::app);
         bool file_has_content = file_exists_and_not_empty(output_filename);
         if (!ofs.is_open()) {

@@ -71,6 +71,12 @@ class Builder {
     if ((64 - clzl) < num_radix_bits) return 0;
     return 64 - num_radix_bits - clzl;
   }
+  // KeyType == int64_t.
+    static size_t GetNumShiftBits (int64_t diff, size_t num_radix_bits) {
+        const uint32_t clzl = __builtin_clzl (static_cast<uint64_t> (std::floor (diff)));
+        if ((64 - clzl) < num_radix_bits) return 0;
+        return 64 - num_radix_bits - clzl;
+    }
 
   void AddKey(KeyType key, size_t position) {
     assert(key >= min_key_ && key <= max_key_);
